@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import apiClient from '../api/apiClient';
 import { Paperclip, Send, CheckCircle2, BookOpen, ExternalLink, RefreshCw, Mic, Sparkles, FileText, User } from 'lucide-react';
+
 
 export default function ChatPage({ currentUser }) {
   const [conversations, setConversations] = useState([]);
@@ -70,7 +71,7 @@ export default function ChatPage({ currentUser }) {
 
   const fetchConversations = async () => {
     try {
-      const res = await axios.get('/api/chat/conversations');
+      const res = await apiClient.get('/chat/conversations');
       if (res.data.success && res.data.conversations.length > 0) {
         setConversations(res.data.conversations);
       }
@@ -90,10 +91,11 @@ export default function ChatPage({ currentUser }) {
     setIsLoading(true);
 
     try {
-      const res = await axios.post('/api/chat/query', {
+      const res = await apiClient.post('/chat/query', {
         message: userText,
         conversation_id: currentConvId
       });
+
 
       if (res.data.success) {
         if (!currentConvId && res.data.conversation_id) {

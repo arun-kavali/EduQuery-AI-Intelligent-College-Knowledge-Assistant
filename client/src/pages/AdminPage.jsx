@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../api/apiClient';
 import { UploadCloud, CheckCircle2, RefreshCw, FileText, Grid, MessageSquare, Star, Plus, ArrowRight, Play } from 'lucide-react';
 
 export default function AdminPage({ currentUser }) {
@@ -34,7 +34,7 @@ export default function AdminPage({ currentUser }) {
 
   const fetchStats = async () => {
     try {
-      const res = await axios.get('/api/admin/stats');
+      const res = await apiClient.get('/admin/stats');
       if (res.data.success && res.data.stats) {
         setStats({
           total_documents: res.data.stats.total_documents ? res.data.stats.total_documents.toString() : '725',
@@ -60,7 +60,7 @@ export default function AdminPage({ currentUser }) {
     formData.append('category', 'Academics');
 
     try {
-      const res = await axios.post('/api/documents/upload', formData, {
+      const res = await apiClient.post('/documents/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           'x-user-role': currentUser?.role || 'admin'
@@ -81,7 +81,7 @@ export default function AdminPage({ currentUser }) {
     if (!testQuery.trim()) return;
     setIsTesting(true);
     try {
-      const res = await axios.post('/api/chat/query', { message: testQuery });
+      const res = await apiClient.post('/chat/query', { message: testQuery });
       if (res.data.success) {
         setTestResults({
           chunks: (res.data.citations || []).map((c, i) => ({
@@ -98,6 +98,7 @@ export default function AdminPage({ currentUser }) {
       setIsTesting(false);
     }
   };
+
 
   return (
     <div style={{ padding: '32px 40px 80px', background: '#f8fafc', minHeight: '100vh' }}>

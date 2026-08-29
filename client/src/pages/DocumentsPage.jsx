@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../api/apiClient';
 import { Search, Upload, FileText, Layers, RefreshCw, CheckCircle2, MoreVertical } from 'lucide-react';
 
 export default function DocumentsPage() {
@@ -74,7 +74,7 @@ export default function DocumentsPage() {
   const fetchDocuments = async () => {
     setIsLoading(true);
     try {
-      const res = await axios.get('/api/documents', {
+      const res = await apiClient.get('/documents', {
         params: { category: activeCategory, search: searchQuery }
       });
       if (res.data.success && res.data.documents.length > 0) {
@@ -98,7 +98,7 @@ export default function DocumentsPage() {
   const openDocChunks = async (doc) => {
     setSelectedDocModal(doc);
     try {
-      const res = await axios.get(`/api/documents/${doc.id}`);
+      const res = await apiClient.get(`/documents/${doc.id}`);
       if (res.data.success) {
         setModalChunks(res.data.chunks || []);
       }
@@ -106,6 +106,7 @@ export default function DocumentsPage() {
       console.error('Error loading chunks:', err);
     }
   };
+
 
   const filteredDocs = documents.filter(doc => {
     const matchesCat = activeCategory === 'All' || doc.category === activeCategory;
