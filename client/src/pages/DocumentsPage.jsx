@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import apiClient from '../api/apiClient';
-import { Search, Upload, FileText, Layers, RefreshCw, CheckCircle2, MoreVertical, ShieldAlert } from 'lucide-react';
+import { Search, Upload, FileText, Layers, RefreshCw, CheckCircle2, MoreVertical, ShieldAlert, Trash2 } from 'lucide-react';
+
 
 export default function DocumentsPage({ currentUser }) {
   const [documents, setDocuments] = useState([]);
@@ -151,14 +152,36 @@ export default function DocumentsPage({ currentUser }) {
   });
 
 
+  const handleDeleteDocument = async (docId, e) => {
+    if (e) e.stopPropagation();
+    if (currentUser?.role !== 'admin') return;
+    if (!window.confirm('Are you sure you want to delete this document and its vector chunks?')) return;
+
+    try {
+      const res = await apiClient.delete(`/documents/${docId}`);
+      if (res.data.success) {
+        setUploadStatusMsg('✓ Document deleted from vector knowledge base.');
+        fetchDocuments();
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      setUploadStatusMsg(`✕ Failed to delete: ${err.response?.data?.error || err.message}`);
+    }
+  };
+
   return (
     <div style={{ padding: '32px 40px 80px', background: '#f8fafc', minHeight: '100vh' }}>
       
       {/* Header Row matching Reference Image */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-          College Knowledge Base
-        </h1>
+        <div>
+          <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+            College Knowledge Base
+          </h1>
+          <div style={{ fontSize: '0.825rem', color: '#64748b', marginTop: '2px', fontWeight: 500 }}>
+            {currentUser?.role === 'admin' ? 'Knowledge Base Management & Ingestion (Admin Workspace)' : 'Academic Policy & Document Search (Read-only)'}
+          </div>
+        </div>
 
         {/* Right Search Bar & Upload Document Action Button */}
         <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
@@ -182,27 +205,31 @@ export default function DocumentsPage({ currentUser }) {
             />
           </div>
 
-          <button
-            onClick={handleUploadClick}
-            disabled={isUploading}
-            className="btn btn-primary"
-            style={{
-              padding: '8px 18px',
-              borderRadius: '8px',
-              background: '#0b3bbd',
-              fontWeight: 600,
-              fontSize: '0.875rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              boxShadow: '0 2px 6px rgba(11, 59, 189, 0.2)',
-              cursor: 'pointer'
-            }}
-          >
-            <Upload size={16} /> Upload Document
-          </button>
+          {/* Upload button is ONLY visible for Admin role */}
+          {currentUser?.role === 'admin' && (
+            <button
+              onClick={handleUploadClick}
+              disabled={isUploading}
+              className="btn btn-primary"
+              style={{
+                padding: '8px 18px',
+                borderRadius: '8px',
+                background: '#0b3bbd',
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 6px rgba(11, 59, 189, 0.2)',
+                cursor: 'pointer'
+              }}
+            >
+              <Upload size={16} /> Upload Document
+            </button>
+          )}
         </div>
       </div>
+
 
       {uploadStatusMsg && (
         <div style={{
@@ -273,7 +300,7 @@ export default function DocumentsPage({ currentUser }) {
               }}
             >
               <div>
-                {/* Top Row: Icon & Three Dots */}
+                {/* Top Row: Icon & Delete button for Admins */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                   <div style={{
                     width: '36px',
@@ -288,13 +315,24 @@ export default function DocumentsPage({ currentUser }) {
                     <FileText size={18} />
                   </div>
 
-                  <button
-                    style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <MoreVertical size={16} />
-                  </button>
+                  {currentUser?.role === 'admin' ? (
+                    <button
+                      style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 600 }}
+                      onClick={(e) => handleDeleteDocument(doc.id, e)}
+                      title="Delete document and vector embeddings"
+                    >
+                      <Trash2 size={14} /> Delete
+                    </button>
+                  ) : (
+                    <button
+                      style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+                  )}
                 </div>
+
 
                 {/* Document Title */}
                 <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', marginBottom: '10px', lineHeight: 1.3 }}>

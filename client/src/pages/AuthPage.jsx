@@ -1,32 +1,125 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
+import { supabase as sbClient } from '../supabaseClient';
+
 
 export default function AuthPage({ currentUser, setCurrentUser }) {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [selectedRole, setSelectedRole] = useState('student');
+  const [loading, setLoading] = useState(false);
+  const [authError, setAuthError] = useState(null);
+  const [authSuccess, setAuthSuccess] = useState(null);
   const navigate = useNavigate();
 
-  const handleAuthSubmit = (e) => {
+  const handleAuthSubmit = async (e) => {
     e.preventDefault();
-    const userProfile = {
-      email: email || (selectedRole === 'admin' ? 'demo@eduquery.ai' : 'student@eduquery.edu'),
-      full_name: selectedRole === 'admin' ? 'Campus Admin' : 'Student',
-      role: selectedRole
-    };
-    if (setCurrentUser) {
-      setCurrentUser(userProfile);
-    }
-    navigate(selectedRole === 'admin' ? '/admin' : '/chat');
-  };
+    setAuthError(null);
+    setAuthSuccess(null);
 
-  const handleDemoFill = () => {
-    setEmail('demo@eduquery.ai');
-    setPassword('demo123');
-    setSelectedRole('student');
+    if (!email || !password) {
+      setAuthError('Please enter both email address and password.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      if (isLogin) {
+        // Strict Login: ONLY use signInWithPassword. NEVER auto-create accounts!
+        const { data, error } = await sbClient.auth.signInWithPassword({
+          email: email.trim(),
+          password
+        });
+
+        if (error) {
+          setAuthError('No account found or invalid login credentials. Please check your email and password, or register first.');
+          setLoading(false);
+          return;
+        }
+
+        if (data && data.user) {
+          // Fetch verified user profile role from Supabase PostgreSQL public.profiles table
+          const { data: profile } = await sbClient
+            .from('profiles')
+            .select('*')
+            .eq('email', data.user.email)
+            .maybeSingle();
+
+          const verifiedRole = profile?.role || 'student';
+          const verifiedName = profile?.full_name || data.user.user_metadata?.full_name || email.split('@')[0];
+
+          const userProfile = {
+            id: data.user.id,
+            email: data.user.email,
+            full_name: verifiedName,
+            role: verifiedRole,
+            token: data.session?.access_token || ''
+          };
+
+          if (setCurrentUser) {
+            setCurrentUser(userProfile);
+          }
+
+          setAuthSuccess(`Welcome back, ${verifiedName}! Redirecting...`);
+          setTimeout(() => {
+            navigate(verifiedRole === 'admin' ? '/admin' : '/chat');
+          }, 800);
+        }
+      } else {
+        // Public Registration: MUST ALWAYS assign role 'student'. Never allow Admin self-registration.
+        if (password.length < 6) {
+          setAuthError('Password must be at least 6 characters long.');
+          setLoading(false);
+          return;
+        }
+
+        const { data, error } = await sbClient.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: {
+              full_name: fullName.trim() || email.split('@')[0],
+              role: 'student'
+            }
+          }
+        });
+
+        if (error) {
+          setAuthError(`Registration failed: ${error.message}`);
+          setLoading(false);
+          return;
+        }
+
+        if (data && data.user) {
+          // Ensure profile is inserted into public.profiles table with default role 'student'
+          try {
+            await sbClient.from('profiles').upsert([
+              {
+                id: data.user.id,
+                email: data.user.email,
+                full_name: fullName.trim() || email.split('@')[0],
+                role: 'student'
+              }
+            ]);
+          } catch (pErr) {
+            console.warn('Profile upsert warning:', pErr);
+          }
+
+          setAuthSuccess('Account created successfully with Student access! Please log in now.');
+          setIsLogin(true);
+          setPassword('');
+        }
+      }
+    } catch (err) {
+      console.error('Authentication Error:', err);
+      setAuthError('An unexpected authentication error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -116,18 +209,20 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
             <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>
               EduQuery AI
             </h2>
+            <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '4px' }}>
+              {isLogin ? 'Sign in to access your knowledge dashboard' : 'Create your student knowledge account'}
+            </div>
           </div>
-
 
           {/* Segmented Log In / Register Tabs */}
           <div style={{
             display: 'flex',
             borderBottom: '2px solid #f1f5f9',
-            marginBottom: '28px'
+            marginBottom: '24px'
           }}>
             <button
               type="button"
-              onClick={() => setIsLogin(true)}
+              onClick={() => { setIsLogin(true); setAuthError(null); setAuthSuccess(null); }}
               style={{
                 flex: 1,
                 paddingBottom: '10px',
@@ -145,7 +240,7 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
             </button>
             <button
               type="button"
-              onClick={() => setIsLogin(false)}
+              onClick={() => { setIsLogin(false); setAuthError(null); setAuthSuccess(null); }}
               style={{
                 flex: 1,
                 paddingBottom: '10px',
@@ -163,12 +258,66 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
             </button>
           </div>
 
+          {/* Alert Messages */}
+          {authError && (
+            <div style={{
+              padding: '12px 14px',
+              borderRadius: '8px',
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              color: '#dc2626',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <AlertCircle size={16} style={{ flexShrink: 0 }} />
+              <div>{authError}</div>
+            </div>
+          )}
+
+          {authSuccess && (
+            <div style={{
+              padding: '12px 14px',
+              borderRadius: '8px',
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              color: '#1d4ed8',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <CheckCircle size={16} style={{ flexShrink: 0 }} />
+              <div>{authSuccess}</div>
+            </div>
+          )}
+
           {/* Form Inputs */}
           <form onSubmit={handleAuthSubmit}>
+            {!isLogin && (
+              <div className="form-group">
+                <label className="form-label" style={{ fontSize: '0.8rem', color: '#475569' }}>Full Name</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="John Doe"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  style={{ borderRadius: '8px', padding: '10px 14px' }}
+                />
+              </div>
+            )}
+
             <div className="form-group">
               <label className="form-label" style={{ fontSize: '0.8rem', color: '#475569' }}>Email</label>
               <input
                 type="email"
+                required
                 className="form-input"
                 placeholder="name@university.edu"
                 value={email}
@@ -182,6 +331,7 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
               <div style={{ position: 'relative' }}>
                 <input
                   type={showPassword ? 'text' : 'password'}
+                  required
                   className="form-input"
                   placeholder="••••••••"
                   value={password}
@@ -209,44 +359,10 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
               </div>
             </div>
 
-            {/* Role Radio Switcher matching Reference UI */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '24px',
-              margin: '20px 0 24px',
-              fontSize: '0.875rem',
-              color: '#334155',
-              fontWeight: 600
-            }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="userRole"
-                  value="student"
-                  checked={selectedRole === 'student'}
-                  onChange={() => setSelectedRole('student')}
-                  style={{ accentColor: '#0b3bbd' }}
-                />
-                <span>Student</span>
-              </label>
-
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="userRole"
-                  value="admin"
-                  checked={selectedRole === 'admin'}
-                  onChange={() => setSelectedRole('admin')}
-                  style={{ accentColor: '#0b3bbd' }}
-                />
-                <span>Admin</span>
-              </label>
-            </div>
-
-            {/* Login Button */}
+            {/* Login / Register Action Button */}
             <button
               type="submit"
+              disabled={loading}
               className="btn btn-primary"
               style={{
                 width: '100%',
@@ -255,40 +371,24 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
                 background: '#0b3bbd',
                 fontSize: '0.95rem',
                 fontWeight: 600,
-                boxShadow: '0 4px 12px rgba(11, 59, 189, 0.25)'
+                boxShadow: '0 4px 12px rgba(11, 59, 189, 0.25)',
+                cursor: loading ? 'wait' : 'pointer',
+                marginTop: '12px'
               }}
             >
-              {isLogin ? 'Login' : 'Register'}
+              {loading ? 'Authenticating...' : isLogin ? 'Sign In' : 'Create Account'}
             </button>
           </form>
 
-          {/* Bottom Links & Demo Account Helper */}
+          {/* Bottom Switch Link */}
           <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '0.8rem', color: '#64748b' }}>
-            <span>Forgot pass? </span>
+            <span>{isLogin ? "Don't have an account? " : "Already registered? "}</span>
             <span
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={() => { setIsLogin(!isLogin); setAuthError(null); setAuthSuccess(null); }}
               style={{ color: '#0b3bbd', fontWeight: 600, cursor: 'pointer' }}
             >
-              {isLogin ? 'Register' : 'Login'}
+              {isLogin ? 'Register now' : 'Sign in'}
             </span>
-          </div>
-
-          <div
-            onClick={handleDemoFill}
-            style={{
-              marginTop: '20px',
-              background: '#eff6ff',
-              border: '1px dashed #93c5fd',
-              borderRadius: '8px',
-              padding: '10px',
-              textAlign: 'center',
-              cursor: 'pointer',
-              fontSize: '0.78rem',
-              color: '#1d4ed8',
-              fontWeight: 600
-            }}
-          >
-            ⚡ Auto-fill Demo Account Details
           </div>
 
         </div>
@@ -297,4 +397,3 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
     </div>
   );
 }
-
