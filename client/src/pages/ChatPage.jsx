@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../api/apiClient';
-import { Paperclip, Send, CheckCircle2, BookOpen, ExternalLink, RefreshCw, Mic, Sparkles, FileText, User } from 'lucide-react';
+import { Paperclip, Send, CheckCircle2, BookOpen, ExternalLink, RefreshCw, Mic, Sparkles, FileText, User, ThumbsUp, ThumbsDown, MessageSquare } from 'lucide-react';
 
 export default function ChatPage({ currentUser }) {
   const { conversationId } = useParams();
@@ -13,26 +13,8 @@ export default function ChatPage({ currentUser }) {
   const [isLoading, setIsLoading] = useState(false);
   const [activeSources, setActiveSources] = useState([]);
   const [activeCitationModal, setActiveCitationModal] = useState(null);
+  const [feedbackState, setFeedbackState] = useState({}); // { [messageId]: 'positive' | 'negative' }
   const messagesEndRef = useRef(null);
-
-  const defaultMessages = [
-    {
-      id: 'demo-1',
-      sender: 'user',
-      user_label: currentUser?.role || 'Student',
-      content: 'What is the minimum attendance requirement for semester examinations?'
-    },
-    {
-      id: 'demo-2',
-      sender: 'assistant',
-      confidence: 'High Confidence',
-      is_verified: true,
-      content: 'The minimum attendance requirement for semester examinations is 75% as per official university regulations.',
-      citations: [
-        { id: 1, document_title: 'Examination Regulations', category: 'DOCUMENT', similarity_score: 93, snippet: 'Minimum attendance requirement for semester examinations is 75%...' }
-      ]
-    }
-  ];
 
   useEffect(() => {
     if (currentUser?.id) {
@@ -88,11 +70,12 @@ export default function ChatPage({ currentUser }) {
           content: m.content,
           citations: m.citations || [],
           confidence: m.is_unknown ? 'Low Confidence' : 'High Confidence',
-          is_verified: !m.is_unknown
+          is_verified: !m.is_unknown,
+          feedback: m.feedback
         }));
         setMessages(formatted);
 
-        // Collect all citations from assistant messages
+        // Collect citations
         const allCitations = [];
         res.data.messages.forEach((m) => {
           if (m.sender === 'assistant' && Array.isArray(m.citations)) {
@@ -126,8 +109,6 @@ export default function ChatPage({ currentUser }) {
     }
   };
 
-
-
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
     if (!inputMessage.trim() || isLoading) return;
@@ -144,10 +125,10 @@ export default function ChatPage({ currentUser }) {
         conversation_id: currentConvId
       });
 
-
       if (res.data.success) {
         if (!currentConvId && res.data.conversation_id) {
           setCurrentConvId(res.data.conversation_id);
+          navigate(`/chat/${res.data.conversation_id}`, { replace: true });
         }
 
         const newCitations = res.data.citations || [];
@@ -172,13 +153,14 @@ export default function ChatPage({ currentUser }) {
             snippet: c.snippet || ''
           })));
         }
+        fetchConversations();
       }
     } catch (err) {
       setMessages((prev) => [
         ...prev,
         {
           sender: 'assistant',
-          content: 'An error occurred while connecting with the backend RAG pipeline. Please ensure the backend server is running.',
+          content: 'An error occurred while communicating with the RAG pipeline. Please check server connectivity.',
           citations: [],
           confidence: 'Error',
           is_verified: false
@@ -189,10 +171,23 @@ export default function ChatPage({ currentUser }) {
     }
   };
 
+  const handleFeedback = async (messageId, rating) => {
+    if (!messageId) return;
+    setFeedbackState((prev) => ({ ...prev, [messageId]: rating }));
+    try {
+      await apiClient.post('/chat/feedback', {
+        message_id: messageId,
+        feedback: rating
+      });
+    } catch (err) {
+      console.error('Error recording feedback:', err);
+    }
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#f8fafc' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#f8fafc', fontFamily: 'Inter, sans-serif' }}>
       
-      {/* Top Header matching reference image */}
+      {/* Top Header */}
       <header style={{
         background: '#ffffff',
         borderBottom: '1px solid #e2e8f0',
@@ -204,14 +199,14 @@ export default function ChatPage({ currentUser }) {
       }}>
         <div>
           <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a', margin: 0, lineHeight: 1.2 }}>
-            AI Research Assistant
+            AI College Research Assistant
           </h1>
           <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>
-            Cowtiegen courcen assistant
+            Grounded RAG Search & Institutional Policy Verification
           </div>
         </div>
 
-        {/* Top-Right Green Status Badges */}
+        {/* Status Badges */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
             background: '#dcfce7',
@@ -225,12 +220,12 @@ export default function ChatPage({ currentUser }) {
             gap: '6px'
           }}>
             <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#16a34a' }} />
-            Knowledge Base: Online
+            pgvector Base: Online
           </div>
 
           <div style={{
-            background: '#dcfce7',
-            color: '#15803d',
+            background: '#dbeafe',
+            color: '#1d4ed8',
             padding: '5px 12px',
             borderRadius: '999px',
             fontSize: '0.78rem',
@@ -239,20 +234,48 @@ export default function ChatPage({ currentUser }) {
             alignItems: 'center',
             gap: '6px'
           }}>
-            <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#16a34a' }} />
-            AI Status: Ready
+            <Sparkles size={13} />
+            Gemini LLM: Ready
           </div>
         </div>
       </header>
 
-      {/* Main Body Grid: Chat Feed (Left) + Active Sources Panel (Right) */}
+      {/* Main Body Grid */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
         
         {/* Chat Feed Column */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '24px 36px', overflowY: 'auto' }}>
           
-          {/* Messages Feed Container */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '780px', margin: '0 auto', width: '100%' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '820px', margin: '0 auto', width: '100%' }}>
+            
+            {messages.length === 0 && !isLoading && (
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: '#64748b' }}>
+                <div style={{ width: '54px', height: '54px', borderRadius: '16px', background: '#f3e8ff', color: '#7e22ce', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+                  <Sparkles size={28} />
+                </div>
+                <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a', marginBottom: '8px' }}>
+                  Welcome to EduQuery AI
+                </h2>
+                <p style={{ fontSize: '0.9rem', color: '#64748b', maxWidth: '480px', margin: '0 auto 24px', lineHeight: 1.5 }}>
+                  Ask any question regarding institutional regulations, course attendance rules, grading policies, fees, or campus guidelines.
+                </p>
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => { setInputMessage('What is the minimum attendance requirement for semester exams?'); }}
+                    style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '8px 14px', fontSize: '0.8rem', fontWeight: 600, color: '#334155', cursor: 'pointer' }}
+                  >
+                    "What is minimum attendance for exams?"
+                  </button>
+                  <button
+                    onClick={() => { setInputMessage('What is the GPA grading scale for courses?'); }}
+                    style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '8px 14px', fontSize: '0.8rem', fontWeight: 600, color: '#334155', cursor: 'pointer' }}
+                  >
+                    "What is the GPA grading scale?"
+                  </button>
+                </div>
+              </div>
+            )}
+
             {messages.map((msg, idx) => (
               <div key={idx} style={{ width: '100%' }}>
                 
@@ -294,9 +317,8 @@ export default function ChatPage({ currentUser }) {
                     </div>
                   </div>
                 ) : (
-                  /* Assistant Response Card with Badges & Citation Pills */
+                  /* Assistant Response Card */
                   <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
-                    {/* Purple Sparkle AI Logo Icon */}
                     <div style={{
                       width: '32px',
                       height: '32px',
@@ -320,43 +342,83 @@ export default function ChatPage({ currentUser }) {
                         padding: '20px 24px',
                         boxShadow: '0 2px 8px rgba(126, 34, 206, 0.05)'
                       }}>
-                        {/* Status Badges Row inside AI Card */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-                          <span style={{
-                            background: '#f3e8ff',
-                            color: '#7e22ce',
-                            padding: '3px 10px',
-                            borderRadius: '999px',
-                            fontSize: '0.75rem',
-                            fontWeight: 700
-                          }}>
-                            {msg.confidence || 'High Confidence'}
-                          </span>
-
-                          {msg.is_verified !== false && (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <span style={{
-                              background: '#dcfce7',
-                              color: '#15803d',
-                              border: '1px solid #bbf7d0',
+                              background: '#f3e8ff',
+                              color: '#7e22ce',
                               padding: '3px 10px',
                               borderRadius: '999px',
                               fontSize: '0.75rem',
-                              fontWeight: 700,
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px'
+                              fontWeight: 700
                             }}>
-                              <CheckCircle2 size={12} /> Verified Answer
+                              {msg.confidence || 'High Confidence'}
                             </span>
+
+                            {msg.is_verified !== false && (
+                              <span style={{
+                                background: '#dcfce7',
+                                color: '#15803d',
+                                border: '1px solid #bbf7d0',
+                                padding: '3px 10px',
+                                borderRadius: '999px',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}>
+                                <CheckCircle2 size={12} /> Verified Grounded Answer
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Thumbs Up / Down Feedback Controls */}
+                          {msg.id && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <button
+                                onClick={() => handleFeedback(msg.id, 'positive')}
+                                title="Helpful answer"
+                                style={{
+                                  background: feedbackState[msg.id] === 'positive' ? '#dcfce7' : '#ffffff',
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: '6px',
+                                  padding: '4px 8px',
+                                  cursor: 'pointer',
+                                  color: feedbackState[msg.id] === 'positive' ? '#15803d' : '#64748b',
+                                  display: 'flex',
+                                  alignItems: 'center'
+                                }}
+                              >
+                                <ThumbsUp size={13} />
+                              </button>
+
+                              <button
+                                onClick={() => handleFeedback(msg.id, 'negative')}
+                                title="Not helpful"
+                                style={{
+                                  background: feedbackState[msg.id] === 'negative' ? '#fef2f2' : '#ffffff',
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: '6px',
+                                  padding: '4px 8px',
+                                  cursor: 'pointer',
+                                  color: feedbackState[msg.id] === 'negative' ? '#dc2626' : '#64748b',
+                                  display: 'flex',
+                                  alignItems: 'center'
+                                }}
+                              >
+                                <ThumbsDown size={13} />
+                              </button>
+                            </div>
                           )}
                         </div>
 
-                        {/* Text Content */}
+                        {/* Content */}
                         <div style={{ fontSize: '0.925rem', color: '#1e293b', lineHeight: 1.6, marginBottom: '18px', whiteSpace: 'pre-wrap' }}>
                           {msg.content}
                         </div>
 
-                        {/* Citation Pills Row */}
+                        {/* Citations */}
                         {msg.citations && msg.citations.length > 0 && (
                           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', paddingTop: '12px', borderTop: '1px solid #e9d5ff' }}>
                             {msg.citations.map((cit, cIdx) => (
@@ -374,11 +436,10 @@ export default function ChatPage({ currentUser }) {
                                   cursor: 'pointer',
                                   display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '4px',
-                                  transition: 'all 0.15s ease'
+                                  gap: '4px'
                                 }}
                               >
-                                [{cit.id || cIdx + 1}] {cit.document_title}
+                                [{cIdx + 1}] {cit.document_title} ({cit.similarity_score}%)
                               </button>
                             ))}
                           </div>
@@ -394,15 +455,15 @@ export default function ChatPage({ currentUser }) {
 
             {isLoading && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#7e22ce', fontSize: '0.875rem', fontWeight: 600, paddingLeft: '46px' }}>
-                <RefreshCw size={16} className="animate-spin" /> Synthesizing grounded response from documents...
+                <RefreshCw size={16} className="animate-spin" /> Synthesizing grounded response from verified documents...
               </div>
             )}
 
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Bottom Floating Prompt Bar matching Reference Image */}
-          <div style={{ maxWidth: '780px', margin: '20px auto 0', width: '100%' }}>
+          {/* Bottom Floating Prompt Bar */}
+          <div style={{ maxWidth: '820px', margin: '20px auto 0', width: '100%' }}>
             <form
               onSubmit={handleSendMessage}
               style={{
@@ -420,11 +481,9 @@ export default function ChatPage({ currentUser }) {
                 <User size={16} color="#64748b" />
               </div>
 
-              <Paperclip size={18} color="#94a3b8" style={{ cursor: 'pointer' }} />
-              
               <input
                 type="text"
-                placeholder="AI floating AI prompt..."
+                placeholder="Ask any question about college regulations, fees, exams, or policies..."
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 disabled={isLoading}
@@ -437,8 +496,6 @@ export default function ChatPage({ currentUser }) {
                   background: 'transparent'
                 }}
               />
-
-              <Mic size={18} color="#94a3b8" style={{ cursor: 'pointer' }} />
 
               <button
                 type="submit"
@@ -465,7 +522,7 @@ export default function ChatPage({ currentUser }) {
 
         </div>
 
-        {/* Right Active Sources Drawer matching Reference Image */}
+        {/* Right Active Sources Drawer */}
         <aside style={{
           width: '300px',
           minWidth: '300px',
@@ -478,69 +535,72 @@ export default function ChatPage({ currentUser }) {
           overflowY: 'auto'
         }}>
           <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
-            Active Sources
+            Retrieved Sources ({activeSources.length})
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {activeSources.map((source, idx) => (
-              <div
-                key={idx}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '12px',
-                  padding: '16px',
-                  boxShadow: '0 1px 3px rgba(15, 23, 42, 0.03)'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <FileText size={16} color="#0b3bbd" />
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>
-                      {source.document_title}
+          {activeSources.length === 0 ? (
+            <div style={{ fontSize: '0.8rem', color: '#94a3b8', padding: '12px 0' }}>
+              No active sources retrieved yet. Submit a query to see grounded document citations.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {activeSources.map((source, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '12px',
+                    padding: '14px',
+                    boxShadow: '0 1px 3px rgba(15, 23, 42, 0.03)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }}>
+                      <FileText size={15} color="#0b3bbd" style={{ flexShrink: 0 }} />
+                      <span style={{ fontSize: '0.825rem', fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {source.document_title}
+                      </span>
+                    </div>
+
+                    <span style={{
+                      background: '#dcfce7',
+                      color: '#15803d',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      padding: '2px 7px',
+                      borderRadius: '999px',
+                      flexShrink: 0
+                    }}>
+                      {source.similarity_score}%
                     </span>
                   </div>
 
-                  <span style={{
-                    background: source.badge_color === 'blue' ? '#eff6ff' : '#dcfce7',
-                    color: source.badge_color === 'blue' ? '#1d4ed8' : '#15803d',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    padding: '2px 8px',
-                    borderRadius: '999px'
-                  }}>
-                    {source.similarity_score}%
-                  </span>
+                  <p style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.45, marginBottom: '8px' }}>
+                    "{source.snippet}"
+                  </p>
+
+                  <button
+                    onClick={() => setActiveCitationModal(source)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#0b3bbd',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: 0
+                    }}
+                  >
+                    Inspect source text <ExternalLink size={12} />
+                  </button>
                 </div>
-
-                <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginBottom: '6px' }}>
-                  {source.type_label || 'Document'}
-                </div>
-
-                <p style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.45, marginBottom: '10px' }}>
-                  {source.snippet}
-                </p>
-
-                <button
-                  onClick={() => setActiveCitationModal(source)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#0b3bbd',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    padding: 0
-                  }}
-                >
-                  View source <ExternalLink size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </aside>
 
       </div>
@@ -557,7 +617,7 @@ export default function ChatPage({ currentUser }) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 200,
+            zIndex: 9999,
             padding: '24px'
           }}
         >
@@ -574,14 +634,18 @@ export default function ChatPage({ currentUser }) {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
               <div>
-                <span className="badge badge-purple" style={{ marginBottom: '6px' }}>{activeCitationModal.category || 'DOCUMENT'}</span>
-                <h3 style={{ fontSize: '1.2rem', color: '#0f172a' }}>{activeCitationModal.document_title}</h3>
+                <span style={{ background: '#f3e8ff', color: '#7e22ce', fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: '4px' }}>
+                  {activeCitationModal.category || 'DOCUMENT'}
+                </span>
+                <h3 style={{ fontSize: '1.2rem', color: '#0f172a', margin: '6px 0 0 0', fontWeight: 800 }}>
+                  {activeCitationModal.document_title}
+                </h3>
               </div>
               <button onClick={() => setActiveCitationModal(null)} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
             </div>
 
-            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '0.875rem', color: '#334155', lineHeight: 1.6 }}>
-              {activeCitationModal.snippet}
+            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '0.875rem', color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+              "{activeCitationModal.snippet}"
             </div>
           </div>
         </div>
@@ -590,4 +654,3 @@ export default function ChatPage({ currentUser }) {
     </div>
   );
 }
-

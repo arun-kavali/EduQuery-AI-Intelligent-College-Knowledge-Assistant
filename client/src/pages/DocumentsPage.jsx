@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import apiClient from '../api/apiClient';
-import { Search, Upload, FileText, Layers, RefreshCw, CheckCircle2, MoreVertical, ShieldAlert, Trash2 } from 'lucide-react';
-
+import { Search, Upload, FileText, Layers, RefreshCw, CheckCircle2, MoreVertical, ShieldAlert, Trash2, Eye, X } from 'lucide-react';
 
 export default function DocumentsPage({ currentUser }) {
   const [documents, setDocuments] = useState([]);
@@ -16,37 +15,7 @@ export default function DocumentsPage({ currentUser }) {
   const [isModalLoading, setIsModalLoading] = useState(false);
   const fileInputRef = useRef(null);
 
-  const categories = ['All', 'Admissions', 'Academics', 'Fees', 'Exams', 'Policies'];
-
-  const defaultDocs = [
-    {
-      id: 'doc-1',
-      title: 'Examination Regulations 2026',
-      category: 'Exams',
-      department: 'Academics',
-      status: 'processed',
-      created_at: '2026',
-      chunk_count: 35
-    },
-    {
-      id: 'doc-2',
-      title: 'Student Attendance Policy',
-      category: 'Policies',
-      department: 'General',
-      status: 'processed',
-      created_at: '2024',
-      chunk_count: 24
-    },
-    {
-      id: 'doc-3',
-      title: 'Hostel and Housing Rules',
-      category: 'Policies',
-      department: 'Housing',
-      status: 'processed',
-      created_at: '2025',
-      chunk_count: 18
-    }
-  ];
+  const categories = ['All', 'Admissions', 'Academics', 'Fees', 'Exams', 'Policies', 'General'];
 
   useEffect(() => {
     fetchDocuments();
@@ -58,22 +27,22 @@ export default function DocumentsPage({ currentUser }) {
       const res = await apiClient.get('/documents', {
         params: { category: activeCategory, search: searchQuery }
       });
-      if (res.data.success && Array.isArray(res.data.documents) && res.data.documents.length > 0) {
+      if (res.data.success && Array.isArray(res.data.documents)) {
         setDocuments(res.data.documents.map(d => ({
           ...d,
           title: d.title || d.file_name || 'Institutional Document',
           category: d.category || 'General',
           department: d.department || 'Academics',
-          status: d.status || 'processed',
+          status: d.status || 'indexed',
           created_at: d.created_at ? d.created_at.slice(0, 10) : '2026',
-          chunk_count: d.chunk_count || 12
+          chunk_count: d.chunk_count || 1
         })));
       } else {
-        setDocuments(defaultDocs);
+        setDocuments([]);
       }
     } catch (err) {
       console.error('Error fetching documents:', err);
-      setDocuments(defaultDocs);
+      setDocuments([]);
     } finally {
       setIsLoading(false);
     }
@@ -81,7 +50,7 @@ export default function DocumentsPage({ currentUser }) {
 
   const handleUploadClick = () => {
     if (currentUser?.role !== 'admin') {
-      setUploadStatusMsg('Access Denied: Only users with the Admin role can upload knowledge base documents.');
+      setUploadStatusMsg('✕ Access Denied: Only users with the Admin role can upload knowledge base documents.');
       setTimeout(() => setUploadStatusMsg(null), 5000);
       return;
     }
@@ -92,8 +61,16 @@ export default function DocumentsPage({ currentUser }) {
     const file = e.target.files[0];
     if (!file) return;
 
+    const allowed = ['pdf', 'docx', 'doc', 'txt'];
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!allowed.includes(ext)) {
+      setUploadStatusMsg(`✕ Unsupported file format (.${ext}). Please upload a PDF, DOCX, or TXT file.`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     setIsUploading(true);
-    setUploadStatusMsg(`Uploading "${file.name}" for text extraction & RAG vector chunking...`);
+    setUploadStatusMsg(`Uploading "${file.name}" for text extraction & 768-d Gemini vector chunking...`);
 
     const formData = new FormData();
     formData.append('file', file);
@@ -102,15 +79,23 @@ export default function DocumentsPage({ currentUser }) {
     formData.append('department', 'General');
 
     try {
-      const res = await apiClient.post('/documents/upload', formData);
+      // Pass Content-Type undefined to allow Axios & browser to set boundary
+      const res = await apiClient.post('/documents/upload', formData, {
+        headers: { 'Content-Type': undefined }
+      });
+
       if (res.data.success) {
         setUploadStatusMsg(`✓ Success: ${res.data.message || 'Document indexed into vector store.'}`);
         fetchDocuments();
+      } else {
+        const stageInfo = res.data.stage ? `[Stage: ${res.data.stage}] ` : '';
+        throw new Error(stageInfo + (res.data.message || 'Document upload failed.'));
       }
     } catch (err) {
       console.error('Upload error:', err);
-      const errMsg = err.response?.data?.error || 'Document upload failed. Check file format or server status.';
-      setUploadStatusMsg(`✕ ${errMsg}`);
+      const stageInfo = err.response?.data?.stage ? `[Failed at Stage: ${err.response.data.stage}] ` : '';
+      const errMsg = err.response?.data?.message || err.response?.data?.error || err.message || 'Upload failed.';
+      setUploadStatusMsg(`✕ ${stageInfo}${errMsg}`);
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -126,22 +111,33 @@ export default function DocumentsPage({ currentUser }) {
       const res = await apiClient.get(`/documents/${doc.id}`);
       if (res.data.success && Array.isArray(res.data.chunks)) {
         setModalChunks(res.data.chunks);
+      } else {
+        setModalChunks([]);
       }
     } catch (err) {
-      console.error('Error loading chunks:', err);
-      // Fallback preview chunk if doc is demo
-      setModalChunks([
-        {
-          chunk_index: 1,
-          content: `Section 1 of ${doc.title}: Minimum attendance requirement for semester examinations is 75%. Medical leave submissions require valid hospital documentation.`
-        },
-        {
-          chunk_index: 2,
-          content: `Section 2 of ${doc.title}: Appeals regarding attendance shortages must be submitted to the Dean of Academic Affairs within 7 working days.`
-        }
-      ]);
+      console.error('Error loading document chunks from database:', err);
+      setModalChunks([]);
     } finally {
       setIsModalLoading(false);
+    }
+  };
+
+  const handleDeleteDocument = async (docId, title, e) => {
+    if (e) e.stopPropagation();
+    if (currentUser?.role !== 'admin') return;
+    if (!window.confirm(`Are you sure you want to delete "${title}" and all associated RAG chunks?`)) return;
+
+    try {
+      const res = await apiClient.delete(`/documents/${docId}`);
+      if (res.data.success) {
+        setUploadStatusMsg('✓ Document and vector embeddings deleted successfully.');
+        fetchDocuments();
+      } else {
+        throw new Error(res.data.message || 'Failed to delete.');
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      setUploadStatusMsg(`✕ Failed to delete: ${err.response?.data?.message || err.response?.data?.error || err.message}`);
     }
   };
 
@@ -151,45 +147,27 @@ export default function DocumentsPage({ currentUser }) {
     return matchesCat && matchesSearch;
   });
 
-
-  const handleDeleteDocument = async (docId, e) => {
-    if (e) e.stopPropagation();
-    if (currentUser?.role !== 'admin') return;
-    if (!window.confirm('Are you sure you want to delete this document and its vector chunks?')) return;
-
-    try {
-      const res = await apiClient.delete(`/documents/${docId}`);
-      if (res.data.success) {
-        setUploadStatusMsg('✓ Document deleted from vector knowledge base.');
-        fetchDocuments();
-      }
-    } catch (err) {
-      console.error('Delete error:', err);
-      setUploadStatusMsg(`✕ Failed to delete: ${err.response?.data?.error || err.message}`);
-    }
-  };
-
   return (
-    <div style={{ padding: '32px 40px 80px', background: '#f8fafc', minHeight: '100vh' }}>
+    <div style={{ padding: '32px 40px 80px', background: '#f8fafc', minHeight: '100vh', fontFamily: 'Inter, sans-serif' }}>
       
-      {/* Header Row matching Reference Image */}
+      {/* Header Row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
             College Knowledge Base
           </h1>
           <div style={{ fontSize: '0.825rem', color: '#64748b', marginTop: '2px', fontWeight: 500 }}>
-            {currentUser?.role === 'admin' ? 'Knowledge Base Management & Ingestion (Admin Workspace)' : 'Academic Policy & Document Search (Read-only)'}
+            {currentUser?.role === 'admin' ? 'Knowledge Base Management & RAG Ingestion (Admin Workspace)' : 'Academic Policy & Verified Document Hub (Student Read-only)'}
           </div>
         </div>
 
-        {/* Right Search Bar & Upload Document Action Button */}
+        {/* Search Bar & Admin Upload Action Button */}
         <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
           <input
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
-            accept=".pdf,.docx,.txt"
+            accept=".pdf,.docx,.doc,.txt"
             style={{ display: 'none' }}
           />
 
@@ -197,7 +175,7 @@ export default function DocumentsPage({ currentUser }) {
             <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
             <input
               type="text"
-              placeholder="Search..."
+              placeholder="Search documents..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="form-input"
@@ -221,15 +199,15 @@ export default function DocumentsPage({ currentUser }) {
                 alignItems: 'center',
                 gap: '6px',
                 boxShadow: '0 2px 6px rgba(11, 59, 189, 0.2)',
-                cursor: 'pointer'
+                cursor: isUploading ? 'wait' : 'pointer'
               }}
             >
-              <Upload size={16} /> Upload Document
+              {isUploading ? <RefreshCw size={16} className="animate-spin" /> : <Upload size={16} />}
+              {isUploading ? 'Uploading...' : 'Upload Document'}
             </button>
           )}
         </div>
       </div>
-
 
       {uploadStatusMsg && (
         <div style={{
@@ -249,7 +227,7 @@ export default function DocumentsPage({ currentUser }) {
         </div>
       )}
 
-      {/* Category Pills Row matching Reference Image */}
+      {/* Category Pills Row */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '28px', flexWrap: 'wrap' }}>
         {categories.map((cat) => {
           const isSelected = activeCategory === cat;
@@ -275,10 +253,18 @@ export default function DocumentsPage({ currentUser }) {
         })}
       </div>
 
-      {/* Document Cards Grid matching Reference Image */}
+      {/* Document Cards Grid */}
       {isLoading ? (
         <div style={{ padding: '60px', textAlign: 'center', color: '#0b3bbd', fontWeight: 600 }}>
-          <RefreshCw size={24} className="animate-spin" /> Loading document index...
+          <RefreshCw size={24} className="animate-spin" /> Loading document knowledge base...
+        </div>
+      ) : filteredDocs.length === 0 ? (
+        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '48px 24px', textAlign: 'center', color: '#64748b' }}>
+          <FileText size={36} color="#cbd5e1" style={{ marginBottom: '12px' }} />
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>No documents found</h3>
+          <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0 }}>
+            {currentUser?.role === 'admin' ? 'Use the Upload Document button to index PDF, DOCX, or TXT institutional policies.' : 'No documents matching your search filter are currently published.'}
+          </p>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
@@ -300,14 +286,14 @@ export default function DocumentsPage({ currentUser }) {
               }}
             >
               <div>
-                {/* Top Row: Icon & Delete button for Admins */}
+                {/* Top Row: Icon & Actions */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                   <div style={{
                     width: '36px',
                     height: '36px',
                     borderRadius: '8px',
-                    background: '#fef2f2',
-                    color: '#dc2626',
+                    background: '#eff6ff',
+                    color: '#0b3bbd',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center'
@@ -318,7 +304,7 @@ export default function DocumentsPage({ currentUser }) {
                   {currentUser?.role === 'admin' ? (
                     <button
                       style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', fontWeight: 600 }}
-                      onClick={(e) => handleDeleteDocument(doc.id, e)}
+                      onClick={(e) => handleDeleteDocument(doc.id, doc.title, e)}
                       title="Delete document and vector embeddings"
                     >
                       <Trash2 size={14} /> Delete
@@ -326,20 +312,20 @@ export default function DocumentsPage({ currentUser }) {
                   ) : (
                     <button
                       style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e) => { e.stopPropagation(); openDocChunks(doc); }}
+                      title="View Chunks"
                     >
-                      <MoreVertical size={16} />
+                      <Eye size={16} />
                     </button>
                   )}
                 </div>
-
 
                 {/* Document Title */}
                 <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', marginBottom: '10px', lineHeight: 1.3 }}>
                   {doc.title}
                 </h3>
 
-                {/* Sub Metadata Tags */}
+                {/* Metadata Tags */}
                 <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, marginBottom: '14px', display: 'flex', gap: '8px' }}>
                   <span>{doc.category}</span>
                   <span>•</span>
@@ -359,7 +345,7 @@ export default function DocumentsPage({ currentUser }) {
                     alignItems: 'center',
                     gap: '4px'
                   }}>
-                    <CheckCircle2 size={12} /> {doc.chunk_count} Chunk
+                    <CheckCircle2 size={12} /> {doc.chunk_count} Chunk{doc.chunk_count !== 1 ? 's' : ''}
                   </span>
                 </div>
               </div>
@@ -409,7 +395,7 @@ export default function DocumentsPage({ currentUser }) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 200,
+            zIndex: 9999,
             padding: '24px'
           }}
         >
@@ -418,10 +404,10 @@ export default function DocumentsPage({ currentUser }) {
             style={{
               background: '#ffffff',
               borderRadius: '16px',
-              maxWidth: '620px',
+              maxWidth: '680px',
               width: '100%',
               padding: '28px',
-              maxHeight: '80vh',
+              maxHeight: '82vh',
               display: 'flex',
               flexDirection: 'column',
               boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
@@ -429,31 +415,47 @@ export default function DocumentsPage({ currentUser }) {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
               <div>
-                <h3 style={{ fontSize: '1.2rem', color: '#0f172a', fontWeight: 800 }}>{selectedDocModal.title}</h3>
+                <h3 style={{ fontSize: '1.2rem', color: '#0f172a', fontWeight: 800, margin: 0 }}>{selectedDocModal.title}</h3>
                 <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>
-                  Status: {selectedDocModal.status} | Total Chunks: {modalChunks.length || selectedDocModal.chunk_count || 0}
+                  Category: {selectedDocModal.category} • Department: {selectedDocModal.department} • Status: {selectedDocModal.status}
                 </div>
               </div>
-              <button onClick={() => setSelectedDocModal(null)} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+              <button onClick={() => setSelectedDocModal(null)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '4px' }}>
+                <X size={20} />
+              </button>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingRight: '4px' }}>
               {isModalLoading ? (
                 <div style={{ textAlign: 'center', padding: '36px', color: '#0b3bbd', fontWeight: 600 }}>
-                  <RefreshCw size={20} className="animate-spin" /> Fetching vector chunk details...
+                  <RefreshCw size={20} className="animate-spin" /> Loading vector chunks from database...
                 </div>
               ) : modalChunks.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
-                  No vector chunk details found for this document.
+                <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8', fontSize: '0.875rem' }}>
+                  No vector chunk details found for this document in Supabase.
                 </div>
               ) : (
                 modalChunks.map((c, i) => (
-                  <div key={i} style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0b3bbd', marginBottom: '4px' }}>CHUNK #{c.chunk_index || i + 1}</div>
-                    <div style={{ fontSize: '0.85rem', color: '#334155', lineHeight: 1.5 }}>{c.content}</div>
+                  <div key={c.id || i} style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0b3bbd', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>CHUNK #{c.chunk_index || i + 1}</span>
+                      <span>768-d Embedding Active</span>
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: '#334155', lineHeight: 1.5, background: '#fff', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', whiteSpace: 'pre-wrap' }}>
+                      {c.content}
+                    </div>
                   </div>
                 ))
               )}
+            </div>
+
+            <div style={{ paddingT: '16px', borderTop: '1px solid #f1f5f9', marginTop: '16px', textAlign: 'right' }}>
+              <button
+                onClick={() => setSelectedDocModal(null)}
+                style={{ padding: '8px 18px', borderRadius: '8px', background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#334155', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}
+              >
+                Close Window
+              </button>
             </div>
           </div>
         </div>
@@ -462,5 +464,3 @@ export default function DocumentsPage({ currentUser }) {
     </div>
   );
 }
-
-

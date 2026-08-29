@@ -55,6 +55,22 @@ export default function Sidebar({ currentUser, setCurrentUser, handleLogout }) {
   };
 
 
+  const handleDeleteConv = async (e, id) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const res = await apiClient.delete(`/chat/conversations/${id}`);
+      if (res.data.success) {
+        setConversations(prev => prev.filter(c => c.id !== id));
+        if (location.pathname === `/chat/${id}`) {
+          navigate('/chat', { replace: true });
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting conversation:', err);
+    }
+  };
+
   return (
     <aside className="sidebar">
       <div>
@@ -123,35 +139,64 @@ export default function Sidebar({ currentUser, setCurrentUser, handleLogout }) {
               No recent chats
             </div>
           ) : (
-            conversations.slice(0, 6).map((item) => {
+            conversations.slice(0, 8).map((item) => {
               const isSelectedConv = location.pathname === `/chat/${item.id}`;
               return (
-                <Link
+                <div
                   key={item.id}
-                  to={`/chat/${item.id}`}
-                  className={`sidebar-history-item ${isSelectedConv ? 'active' : ''}`}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px',
-                    padding: '8px 12px',
+                    justifyContent: 'space-between',
                     borderRadius: '6px',
-                    fontSize: '0.8rem',
-                    color: isSelectedConv ? '#0b3bbd' : '#475569',
                     background: isSelectedConv ? '#eff6ff' : 'transparent',
-                    fontWeight: isSelectedConv ? 700 : 500
+                    padding: '2px 4px',
+                    marginBottom: '2px'
                   }}
                 >
-                  <Clock size={14} color={isSelectedConv ? '#0b3bbd' : '#94a3b8'} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {item.title || 'Conversation'}
-                  </span>
-                </Link>
+                  <Link
+                    to={`/chat/${item.id}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '6px 8px',
+                      fontSize: '0.8rem',
+                      color: isSelectedConv ? '#0b3bbd' : '#475569',
+                      fontWeight: isSelectedConv ? 700 : 500,
+                      textDecoration: 'none',
+                      flex: 1,
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <Clock size={14} color={isSelectedConv ? '#0b3bbd' : '#94a3b8'} style={{ flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.title || 'Conversation'}
+                    </span>
+                  </Link>
+
+                  <button
+                    onClick={(e) => handleDeleteConv(e, item.id)}
+                    title="Delete Conversation"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#94a3b8',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               );
             })
           )}
         </div>
       </div>
+
 
       {/* Bottom User Profile Section */}
       <div className="sidebar-footer">
