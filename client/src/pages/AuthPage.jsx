@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { BookOpen, GraduationCap, Lock, ArrowRight, ShieldCheck, Landmark } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight } from 'lucide-react';
 
 export default function AuthPage({ currentUser, setCurrentUser }) {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [selectedRole, setSelectedRole] = useState('student');
   const navigate = useNavigate();
 
@@ -13,10 +14,12 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
     e.preventDefault();
     const userProfile = {
       email: email || (selectedRole === 'admin' ? 'demo@eduquery.ai' : 'student@eduquery.edu'),
-      full_name: selectedRole === 'admin' ? 'Campus Admin' : 'Alex Student',
+      full_name: selectedRole === 'admin' ? 'Campus Admin' : 'Student',
       role: selectedRole
     };
-    setCurrentUser(userProfile);
+    if (setCurrentUser) {
+      setCurrentUser(userProfile);
+    }
     navigate(selectedRole === 'admin' ? '/admin' : '/chat');
   };
 
@@ -27,210 +30,231 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', width: '100vw' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', width: '100vw', background: '#f8fafc' }}>
       
-      {/* Left Column: Purple Indigo Brand Banner */}
+      {/* Left Column: Deep Royal Blue / Purple Gradient Panel */}
       <div style={{
-        flex: 1,
-        background: 'linear-gradient(135deg, #4338ca 0%, #3730a3 100%)',
+        flex: 1.2,
+        background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #4c1d95 100%)',
         color: '#ffffff',
-        padding: '60px',
+        padding: '60px 80px',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'space-between',
-        position: 'relative'
+        justifyContent: 'center',
+        position: 'relative',
+        overflow: 'hidden'
       }}>
-        {/* Brand Header */}
-        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none', color: '#ffffff' }}>
-          <div style={{ width: '36px', height: '36px', background: '#ffffff', color: '#4338ca', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <BookOpen size={20} />
-          </div>
-          <span style={{ fontSize: '1.4rem', fontWeight: 800 }}>EduQuery AI</span>
-        </Link>
+        {/* Decorative background glow shapes */}
+        <div style={{
+          position: 'absolute',
+          top: '-10%',
+          right: '-10%',
+          width: '350px',
+          height: '350px',
+          borderRadius: '50%',
+          background: 'rgba(255, 255, 255, 0.08)',
+          pointerEvents: 'none'
+        }} />
 
-        {/* Hero Text */}
-        <div style={{ maxWidth: '480px', margin: 'auto 0' }}>
-          <h1 style={{ fontSize: '2.8rem', fontWeight: 800, lineHeight: 1.2, color: '#ffffff', marginBottom: '16px', letterSpacing: '-0.02em' }}>
-            Your College Knowledge, Verified.
+        <div style={{ maxWidth: '480px', zIndex: 2 }}>
+          <h1 style={{ fontSize: '3.4rem', fontWeight: 800, lineHeight: 1.15, color: '#ffffff', marginBottom: '24px', letterSpacing: '-0.03em' }}>
+            Your College Knowledge, <br />
+            Verified.
           </h1>
-          <p style={{ fontSize: '1.05rem', color: '#c7d2fe', lineHeight: 1.6, marginBottom: '40px' }}>
-            Access high-fidelity academic information retrieval. Engineered for rigorous research and seamless synthesis.
+          
+          <p style={{ fontSize: '1.1rem', color: '#cbd5e1', lineHeight: 1.6, marginBottom: '36px' }}>
+            Access verified institutional knowledge and grounded research application.
           </p>
 
-          {/* Classroom Graphic Card Overlay */}
-          <div style={{
-            background: 'rgba(255, 255, 255, 0.1)',
-            backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            borderRadius: '16px',
-            padding: '20px',
-            position: 'relative',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              height: '180px',
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.05) 100%)',
-              display: 'flex',
-              flexDirection: 'column',
+          <Link 
+            to="/" 
+            className="btn btn-secondary" 
+            style={{
+              padding: '12px 24px',
+              borderRadius: '8px',
+              background: 'rgba(255, 255, 255, 0.15)',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              color: '#ffffff',
+              fontWeight: 600,
+              display: 'inline-flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              textAlign: 'center',
-              padding: '20px'
-            }}>
-              <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#ffffff', marginBottom: '6px' }}>EQ EduQuery AI</div>
-              <div style={{ fontSize: '0.9rem', color: '#e0e7ff' }}>Welcome back!</div>
-            </div>
-            
-            <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.825rem', fontWeight: 600, color: '#ffffff' }}>
-              <ShieldCheck size={16} color="#a5b4fc" />
-              <span>Trusted by 500+ Institutions</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer copyright */}
-        <div style={{ fontSize: '0.825rem', color: '#a5b4fc' }}>
-          © 2024 EduQuery AI. All rights reserved.
+              gap: '8px',
+              backdropFilter: 'blur(8px)'
+            }}
+          >
+            Explore Platform <ArrowRight size={16} />
+          </Link>
         </div>
       </div>
 
-      {/* Right Column: Clean White Sign In Form */}
+      {/* Right Column: Centered Auth Form Card */}
       <div style={{
-        width: '560px',
-        background: '#ffffff',
+        flex: 1,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '60px 48px'
+        padding: '40px',
+        background: '#f8fafc'
       }}>
-        <div style={{ width: '100%', maxWidth: '400px' }}>
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.06)',
+          width: '100%',
+          maxWidth: '420px',
+          padding: '40px 36px'
+        }}>
           
-          <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-            <h2 style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', marginBottom: '8px' }}>
-              {isLogin ? 'Welcome back' : 'Create an Account'}
+          {/* Logo Header */}
+          <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+            <div style={{
+              width: '44px',
+              height: '44px',
+              background: '#0b3bbd',
+              color: '#ffffff',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 800,
+              fontSize: '1.1rem',
+              margin: '0 auto 12px',
+              boxShadow: '0 4px 12px rgba(11, 59, 189, 0.25)'
+            }}>
+              EQ
+            </div>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>
+              EduQuery AI
             </h2>
-            <p style={{ color: '#64748b', fontSize: '0.9rem' }}>
-              Sign in to continue your research.
-            </p>
           </div>
 
-          {/* Segmented Log In / Register Toggle */}
+          {/* Segmented Log In / Register Tabs */}
           <div style={{
-            background: '#f1f5f9',
-            padding: '4px',
-            borderRadius: '8px',
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '4px',
-            marginBottom: '24px'
+            display: 'flex',
+            borderBottom: '2px solid #f1f5f9',
+            marginBottom: '28px'
           }}>
             <button
               type="button"
               onClick={() => setIsLogin(true)}
               style={{
-                padding: '8px',
-                borderRadius: '6px',
+                flex: 1,
+                paddingBottom: '10px',
                 border: 'none',
-                background: isLogin ? '#ffffff' : 'transparent',
-                boxShadow: isLogin ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                background: 'transparent',
+                borderBottom: isLogin ? '2px solid #0b3bbd' : '2px solid transparent',
+                marginBottom: '-2px',
                 fontWeight: isLogin ? 700 : 500,
-                color: isLogin ? '#0f172a' : '#64748b',
+                color: isLogin ? '#0b3bbd' : '#64748b',
                 cursor: 'pointer',
-                fontSize: '0.875rem'
+                fontSize: '0.95rem'
               }}
             >
-              Log In
+              Log in
             </button>
             <button
               type="button"
               onClick={() => setIsLogin(false)}
               style={{
-                padding: '8px',
-                borderRadius: '6px',
+                flex: 1,
+                paddingBottom: '10px',
                 border: 'none',
-                background: !isLogin ? '#ffffff' : 'transparent',
-                boxShadow: !isLogin ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                background: 'transparent',
+                borderBottom: !isLogin ? '2px solid #0b3bbd' : '2px solid transparent',
+                marginBottom: '-2px',
                 fontWeight: !isLogin ? 700 : 500,
-                color: !isLogin ? '#0f172a' : '#64748b',
+                color: !isLogin ? '#0b3bbd' : '#64748b',
                 cursor: 'pointer',
-                fontSize: '0.875rem'
+                fontSize: '0.95rem'
               }}
             >
               Register
             </button>
           </div>
 
-          {/* Role Toggle Switcher: Student vs Admin */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-            <button
-              type="button"
-              onClick={() => setSelectedRole('student')}
-              style={{
-                padding: '12px',
-                borderRadius: '10px',
-                border: selectedRole === 'student' ? '2px solid #1d4ed8' : '1px solid #e2e8f0',
-                background: selectedRole === 'student' ? '#eff6ff' : '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                fontWeight: 600,
-                color: selectedRole === 'student' ? '#1d4ed8' : '#475569',
-                cursor: 'pointer'
-              }}
-            >
-              <GraduationCap size={18} /> Student
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setSelectedRole('admin')}
-              style={{
-                padding: '12px',
-                borderRadius: '10px',
-                border: selectedRole === 'admin' ? '2px solid #1d4ed8' : '1px solid #e2e8f0',
-                background: selectedRole === 'admin' ? '#eff6ff' : '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                fontWeight: 600,
-                color: selectedRole === 'admin' ? '#1d4ed8' : '#475569',
-                cursor: 'pointer'
-              }}
-            >
-              <Lock size={18} /> Admin
-            </button>
-          </div>
-
-          {/* Form */}
+          {/* Form Inputs */}
           <form onSubmit={handleAuthSubmit}>
             <div className="form-group">
-              <label className="form-label">Institutional Email</label>
+              <label className="form-label" style={{ fontSize: '0.8rem', color: '#475569' }}>Email</label>
               <input
                 type="email"
                 className="form-input"
                 placeholder="name@university.edu"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                style={{ borderRadius: '8px', padding: '10px 14px' }}
               />
             </div>
 
             <div className="form-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <label className="form-label" style={{ margin: 0 }}>Password</label>
-                <a href="#forgot" style={{ fontSize: '0.78rem', color: '#1d4ed8', fontWeight: 600 }}>Forgot password?</a>
+              <label className="form-label" style={{ fontSize: '0.8rem', color: '#475569' }}>Password</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className="form-input"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={{ borderRadius: '8px', padding: '10px 38px 10px 14px' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
-              <input
-                type="password"
-                className="form-input"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
             </div>
 
+            {/* Role Radio Switcher matching Reference UI */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '24px',
+              margin: '20px 0 24px',
+              fontSize: '0.875rem',
+              color: '#334155',
+              fontWeight: 600
+            }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="userRole"
+                  value="student"
+                  checked={selectedRole === 'student'}
+                  onChange={() => setSelectedRole('student')}
+                  style={{ accentColor: '#0b3bbd' }}
+                />
+                <span>Student</span>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="userRole"
+                  value="admin"
+                  checked={selectedRole === 'admin'}
+                  onChange={() => setSelectedRole('admin')}
+                  style={{ accentColor: '#0b3bbd' }}
+                />
+                <span>Admin</span>
+              </label>
+            </div>
+
+            {/* Login Button */}
             <button
               type="submit"
               className="btn btn-primary"
@@ -241,71 +265,40 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
                 background: '#0b3bbd',
                 fontSize: '0.95rem',
                 fontWeight: 600,
-                marginTop: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px'
+                boxShadow: '0 4px 12px rgba(11, 59, 189, 0.25)'
               }}
             >
-              Sign In <ArrowRight size={16} />
+              {isLogin ? 'Login' : 'Register'}
             </button>
           </form>
 
-          {/* Divider */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            margin: '24px 0',
-            color: '#94a3b8',
-            fontSize: '0.85rem'
-          }}>
-            <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
-            <span>Or</span>
-            <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
+          {/* Bottom Links & Demo Account Helper */}
+          <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '0.8rem', color: '#64748b' }}>
+            <span>Forgot pass? </span>
+            <span
+              onClick={() => setIsLogin(!isLogin)}
+              style={{ color: '#0b3bbd', fontWeight: 600, cursor: 'pointer' }}
+            >
+              {isLogin ? 'Register' : 'Login'}
+            </span>
           </div>
 
-          {/* SSO Button */}
-          <button
-            type="button"
-            className="btn btn-secondary"
-            style={{
-              width: '100%',
-              padding: '10px',
-              borderRadius: '8px',
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              color: '#334155',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              marginBottom: '24px'
-            }}
-          >
-            <Landmark size={18} /> Continue with Institution SSO
-          </button>
-
-          {/* Bottom Purple Demo Card Callout */}
           <div
             onClick={handleDemoFill}
             style={{
-              background: '#f3e8ff',
-              border: '1px dashed #c084fc',
-              borderRadius: '10px',
-              padding: '14px 16px',
+              marginTop: '20px',
+              background: '#eff6ff',
+              border: '1px dashed #93c5fd',
+              borderRadius: '8px',
+              padding: '10px',
               textAlign: 'center',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              color: '#1d4ed8',
+              fontWeight: 600
             }}
           >
-            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#7e22ce', marginBottom: '4px' }}>
-              Try Demo Account
-            </div>
-            <div style={{ fontSize: '0.78rem', color: '#6b21a8' }}>
-              Use <code style={{ background: '#ffffff', padding: '2px 6px', borderRadius: '4px' }}>demo@eduquery.ai</code> / <code style={{ background: '#ffffff', padding: '2px 6px', borderRadius: '4px' }}>demo123</code>
-            </div>
+            ⚡ Auto-fill Demo Account Details
           </div>
 
         </div>
@@ -314,3 +307,4 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
     </div>
   );
 }
+

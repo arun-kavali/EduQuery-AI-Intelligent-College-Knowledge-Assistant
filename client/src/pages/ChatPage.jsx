@@ -1,50 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Paperclip, ArrowUp, CheckCircle2, BookOpen, ExternalLink, RefreshCw, AlertCircle, FileText } from 'lucide-react';
+import { Paperclip, Send, CheckCircle2, BookOpen, ExternalLink, RefreshCw, Mic, Sparkles, FileText, User } from 'lucide-react';
 
 export default function ChatPage({ currentUser }) {
   const [conversations, setConversations] = useState([]);
   const [currentConvId, setCurrentConvId] = useState(null);
   const [messages, setMessages] = useState([
-    // Initial reference conversation matching reference Image 2
+    // Initial reference conversation matching center reference Image
     {
       id: 'demo-1',
       sender: 'user',
-      content: 'What is the policy on late assignments for undergraduate science courses?'
+      user_label: 'Student',
+      content: 'What is the minimum attendance requirement for semester examinations?'
     },
     {
       id: 'demo-2',
       sender: 'assistant',
-      content: `Based on the University Academic Handbook for the current year, the policy for late assignments in undergraduate science courses is generally strict, but offers some flexibility depending on the department.\n\n• Standard Deduction: Most science departments apply a 10% penalty per calendar day for late submissions [1].\n\n• Maximum Lateness: Assignments are typically not accepted after 5 calendar days past the deadline, resulting in an automatic zero [2].\n\n• Exceptions: Documented medical emergencies or pre-approved academic accommodations (such as those granted by the Disability Services Office) can waive these penalties [3].`,
-      confidence: 'HIGH CONFIDENCE',
+      confidence: 'High Confidence',
+      is_verified: true,
+      content: 'What is the minimum attendance requirement for semester examinations? Articles are to minimum on attendance issued once standard policies content on semester examination requirements, and another requirements and non-attendance shows top the values in the grounded response.',
       citations: [
-        {
-          id: 1,
-          document_title: 'Undergraduate Academic Policies 2023-2024',
-          category: 'HANDBOOK',
-          similarity_score: 98,
-          snippet: '...All late submissions in the Faculty of Science are subject to a 10% deduction per calendar day...'
-        },
-        {
-          id: 2,
-          document_title: 'Biology 101 - Course Outline',
-          category: 'SYLLABUS',
-          similarity_score: 92,
-          snippet: '...Assignments will not be accepted after 5 days past the due date. A grade of zero will be entered...'
-        },
-        {
-          id: 3,
-          document_title: 'Student Health Services - Exemption Protocol',
-          category: 'FORMS',
-          similarity_score: 85,
-          snippet: '...To apply for a medical exemption for late coursework, students must submit the official Medical Certificate form...'
-        }
+        { id: 1, document_title: 'Examination Regulations', category: 'DOCUMENT', similarity_score: 93, snippet: 'This is minimum attendance requirement for semester examinations 7 Absences it on...' },
+        { id: 2, document_title: 'Examax Regulations', category: 'POLICY', similarity_score: 78, snippet: 'Snippet on minimum attendance requirement for semester examination for to...' },
+        { id: 3, document_title: 'Examination Regulations', category: 'DOCUMENT', similarity_score: 89, snippet: 'Snippet have no exemptions attendance requirements to relevant policy and agreement...' }
       ]
-    },
-    {
-      id: 'demo-3',
-      sender: 'user',
-      content: 'Are there any specific forms needed for the medical exception?'
     }
   ]);
   const [inputMessage, setInputMessage] = useState('');
@@ -52,24 +31,30 @@ export default function ChatPage({ currentUser }) {
   const [activeSources, setActiveSources] = useState([
     {
       id: 1,
-      document_title: 'Undergraduate Academic Policies 2023-2024',
-      category: 'HANDBOOK',
-      similarity_score: 98,
-      snippet: '...All late submissions in the Faculty of Science are subject to a 10% deduction per calendar day...'
+      document_title: 'Examination Re...',
+      type_label: 'Document',
+      category: 'DOCUMENT',
+      similarity_score: 93,
+      badge_color: 'blue',
+      snippet: 'This is minimum attendance requirement for semester examinations 7 Absences it on...'
     },
     {
       id: 2,
-      document_title: 'Biology 101 - Course Outline',
-      category: 'SYLLABUS',
-      similarity_score: 92,
-      snippet: '...Assignments will not be accepted after 5 days past the due date. A grade of zero will be entered...'
+      document_title: 'Student Atten...',
+      type_label: 'Policy',
+      category: 'POLICY',
+      similarity_score: 78,
+      badge_color: 'green',
+      snippet: 'Snippet on minimum attendance requirement for semester examination for to...'
     },
     {
       id: 3,
-      document_title: 'Student Health Services - Exemption Protocol',
-      category: 'FORMS',
-      similarity_score: 85,
-      snippet: '...To apply for a medical exemption for late coursework, students must submit the official Medical Certificate form...'
+      document_title: 'Student Atten...',
+      type_label: 'Document',
+      category: 'DOCUMENT',
+      similarity_score: 89,
+      badge_color: 'green',
+      snippet: 'Snippet have no exemptions attendance requirements to relevant policy and agreement...'
     }
   ]);
   const [activeCitationModal, setActiveCitationModal] = useState(null);
@@ -100,7 +85,7 @@ export default function ChatPage({ currentUser }) {
 
     const userText = inputMessage;
     setInputMessage('');
-    const userMsg = { sender: 'user', content: userText };
+    const userMsg = { sender: 'user', user_label: currentUser?.role || 'Student', content: userText };
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
 
@@ -117,17 +102,25 @@ export default function ChatPage({ currentUser }) {
 
         const newCitations = res.data.citations || [];
         const botMsg = {
-          id: res.data.message_id,
+          id: res.data.message_id || Date.now(),
           sender: 'assistant',
           content: res.data.answer,
           citations: newCitations,
-          confidence: res.data.is_unknown ? 'LOW CONFIDENCE' : 'HIGH CONFIDENCE',
-          is_unknown: res.data.is_unknown
+          confidence: res.data.is_unknown ? 'Low Confidence' : 'High Confidence',
+          is_verified: !res.data.is_unknown
         };
 
         setMessages((prev) => [...prev, botMsg]);
         if (newCitations.length > 0) {
-          setActiveSources(newCitations);
+          setActiveSources(newCitations.map((c, idx) => ({
+            id: c.id || idx + 1,
+            document_title: c.document_title || `Source Doc ${idx + 1}`,
+            type_label: c.category || 'Document',
+            category: c.category || 'DOCUMENT',
+            similarity_score: c.similarity_score || 90,
+            badge_color: c.similarity_score > 85 ? 'blue' : 'green',
+            snippet: c.snippet || ''
+          })));
         }
       }
     } catch (err) {
@@ -135,9 +128,10 @@ export default function ChatPage({ currentUser }) {
         ...prev,
         {
           sender: 'assistant',
-          content: 'An error occurred while communicating with the backend RAG pipeline. Please verify your backend server connection.',
+          content: 'An error occurred while connecting with the backend RAG pipeline. Please ensure the backend server is running.',
           citations: [],
-          confidence: 'ERROR'
+          confidence: 'Error',
+          is_verified: false
         }
       ]);
     } finally {
@@ -148,115 +142,198 @@ export default function ChatPage({ currentUser }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#f8fafc' }}>
       
-      {/* Top Header Bar */}
+      {/* Top Header matching reference image */}
       <header style={{
         background: '#ffffff',
         borderBottom: '1px solid #e2e8f0',
         padding: '16px 32px',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between'
+        justifyContent: 'space-between',
+        flexShrink: 0
       }}>
-        <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-          College Policies & Guidelines
-        </h1>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            background: '#f1f5f9',
-            border: '1px solid #e2e8f0',
-            padding: '6px 14px',
-            borderRadius: '999px',
-            fontSize: '0.8rem',
-            fontWeight: 600,
-            color: '#334155',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
-            Knowledge Base: Online
+        <div>
+          <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a', margin: 0, lineHeight: 1.2 }}>
+            AI Research Assistant
+          </h1>
+          <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>
+            Cowtiegen courcen assistant
           </div>
+        </div>
 
+        {/* Top-Right Green Status Badges */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
-            fontSize: '0.8rem',
-            fontWeight: 600,
-            color: '#475569',
+            background: '#dcfce7',
+            color: '#15803d',
+            padding: '5px 12px',
+            borderRadius: '999px',
+            fontSize: '0.78rem',
+            fontWeight: 700,
             display: 'flex',
             alignItems: 'center',
             gap: '6px'
           }}>
-            ⚡ AI Status: Ready
+            <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#16a34a' }} />
+            Knowledge Base: Online
+          </div>
+
+          <div style={{
+            background: '#dcfce7',
+            color: '#15803d',
+            padding: '5px 12px',
+            borderRadius: '999px',
+            fontSize: '0.78rem',
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#16a34a' }} />
+            AI Status: Ready
           </div>
         </div>
       </header>
 
-      {/* Main Body Area: Chat Feed + Right Active Sources Drawer */}
+      {/* Main Body Grid: Chat Feed (Left) + Active Sources Panel (Right) */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
         
-        {/* Chat Feed */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '24px 32px', overflowY: 'auto' }}>
+        {/* Chat Feed Column */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '24px 36px', overflowY: 'auto' }}>
           
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '840px', margin: '0 auto', width: '100%' }}>
+          {/* Messages Feed Container */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '780px', margin: '0 auto', width: '100%' }}>
             {messages.map((msg, idx) => (
-              <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.sender === 'user' ? 'flex-end' : 'flex-start' }}>
+              <div key={idx} style={{ width: '100%' }}>
                 
                 {msg.sender === 'user' ? (
-                  /* User Prompt Bubble (Royal Blue Rounded Capsule) */
-                  <div style={{
-                    background: '#0b3bbd',
-                    color: '#ffffff',
-                    padding: '14px 22px',
-                    borderRadius: '16px 16px 4px 16px',
-                    maxWidth: '80%',
-                    fontSize: '0.95rem',
-                    fontWeight: 500,
-                    lineHeight: 1.5,
-                    boxShadow: '0 2px 6px rgba(11, 59, 189, 0.15)'
-                  }}>
-                    {msg.content}
-                  </div>
-                ) : (
-                  /* Assistant Response Card with Thick Purple/Blue Accent Border */
-                  <div style={{
-                    position: 'relative',
-                    maxWidth: '92%',
-                    width: '100%',
-                    display: 'flex',
-                    gap: '16px'
-                  }}>
-                    {/* Blue Avatar Indicator Dot */}
+                  /* Student Question Card */
+                  <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
                     <div style={{
-                      width: '28px',
-                      height: '28px',
-                      background: '#1d4ed8',
-                      borderRadius: '8px',
-                      flexShrink: 0,
-                      marginTop: '4px'
-                    }} />
-
-                    <div style={{
-                      flex: 1,
-                      background: '#ffffff',
-                      border: '1px solid #e2e8f0',
-                      borderLeft: '4px solid #7c3aed',
-                      borderRadius: '12px',
-                      padding: '24px',
-                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.03)'
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: '#e2e8f0',
+                      color: '#475569',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      flexShrink: 0
                     }}>
+                      <User size={18} />
+                    </div>
+
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                        {msg.user_label || 'Student'}
+                      </div>
                       <div style={{
-                        fontSize: '0.95rem',
-                        color: '#1e293b',
-                        lineHeight: 1.65,
-                        whiteSpace: 'pre-wrap',
-                        marginBottom: '16px'
+                        background: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '12px',
+                        padding: '16px 20px',
+                        fontSize: '0.925rem',
+                        color: '#0f172a',
+                        lineHeight: 1.5,
+                        boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)'
                       }}>
                         {msg.content}
                       </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Assistant Response Card with Badges & Citation Pills */
+                  <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+                    {/* Purple Sparkle AI Logo Icon */}
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '10px',
+                      background: '#7e22ce',
+                      color: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      boxShadow: '0 2px 6px rgba(126, 34, 206, 0.25)'
+                    }}>
+                      <Sparkles size={18} />
+                    </div>
 
-                      {/* High Confidence Badge */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.04em' }}>
-                        <CheckCircle2 size={14} /> HIGH CONFIDENCE
+                    <div style={{ flex: 1 }}>
+                      <div style={{
+                        background: '#f8f5ff',
+                        border: '1px solid #e9d5ff',
+                        borderRadius: '14px',
+                        padding: '20px 24px',
+                        boxShadow: '0 2px 8px rgba(126, 34, 206, 0.05)'
+                      }}>
+                        {/* Status Badges Row inside AI Card */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+                          <span style={{
+                            background: '#f3e8ff',
+                            color: '#7e22ce',
+                            padding: '3px 10px',
+                            borderRadius: '999px',
+                            fontSize: '0.75rem',
+                            fontWeight: 700
+                          }}>
+                            {msg.confidence || 'High Confidence'}
+                          </span>
+
+                          {msg.is_verified !== false && (
+                            <span style={{
+                              background: '#dcfce7',
+                              color: '#15803d',
+                              border: '1px solid #bbf7d0',
+                              padding: '3px 10px',
+                              borderRadius: '999px',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}>
+                              <CheckCircle2 size={12} /> Verified Answer
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Text Content */}
+                        <div style={{ fontSize: '0.925rem', color: '#1e293b', lineHeight: 1.6, marginBottom: '18px', whiteSpace: 'pre-wrap' }}>
+                          {msg.content}
+                        </div>
+
+                        {/* Citation Pills Row */}
+                        {msg.citations && msg.citations.length > 0 && (
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', paddingTop: '12px', borderTop: '1px solid #e9d5ff' }}>
+                            {msg.citations.map((cit, cIdx) => (
+                              <button
+                                key={cIdx}
+                                onClick={() => setActiveCitationModal(cit)}
+                                style={{
+                                  background: '#ffffff',
+                                  border: '1px solid #d8b4fe',
+                                  borderRadius: '6px',
+                                  padding: '4px 10px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  color: '#7e22ce',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  transition: 'all 0.15s ease'
+                                }}
+                              >
+                                [{cit.id || cIdx + 1}] {cit.document_title}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
                       </div>
                     </div>
                   </div>
@@ -266,34 +343,38 @@ export default function ChatPage({ currentUser }) {
             ))}
 
             {isLoading && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#1d4ed8', fontSize: '0.9rem', fontWeight: 500 }}>
-                <RefreshCw size={18} className="animate-spin" /> Synthesizing response from vector knowledge base...
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#7e22ce', fontSize: '0.875rem', fontWeight: 600, paddingLeft: '46px' }}>
+                <RefreshCw size={16} className="animate-spin" /> Synthesizing grounded response from documents...
               </div>
             )}
 
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Bottom Floating Prompt Input Box */}
-          <div style={{ maxWidth: '840px', margin: '20px auto 0', width: '100%' }}>
+          {/* Bottom Floating Prompt Bar matching Reference Image */}
+          <div style={{ maxWidth: '780px', margin: '20px auto 0', width: '100%' }}>
             <form
               onSubmit={handleSendMessage}
               style={{
                 background: '#ffffff',
                 border: '1px solid #cbd5e1',
-                borderRadius: '24px',
-                padding: '8px 12px 8px 20px',
+                borderRadius: '999px',
+                padding: '6px 10px 6px 16px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
+                boxShadow: '0 4px 14px rgba(15, 23, 42, 0.08)'
               }}
             >
-              <Paperclip size={20} color="#94a3b8" style={{ cursor: 'pointer' }} />
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <User size={16} color="#64748b" />
+              </div>
+
+              <Paperclip size={18} color="#94a3b8" style={{ cursor: 'pointer' }} />
               
               <input
                 type="text"
-                placeholder="Ask about academic policies, research papers, etc..."
+                placeholder="AI floating AI prompt..."
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 disabled={isLoading}
@@ -301,11 +382,13 @@ export default function ChatPage({ currentUser }) {
                   flex: 1,
                   border: 'none',
                   outline: 'none',
-                  fontSize: '0.95rem',
+                  fontSize: '0.9rem',
                   color: '#0f172a',
                   background: 'transparent'
                 }}
               />
+
+              <Mic size={18} color="#94a3b8" style={{ cursor: 'pointer' }} />
 
               <button
                 type="submit"
@@ -314,34 +397,28 @@ export default function ChatPage({ currentUser }) {
                   width: '36px',
                   height: '36px',
                   borderRadius: '50%',
-                  background: inputMessage.trim() ? '#0b3bbd' : '#e2e8f0',
+                  background: inputMessage.trim() ? '#0b3bbd' : '#cbd5e1',
                   color: '#ffffff',
                   border: 'none',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: inputMessage.trim() ? 'pointer' : 'default',
-                  transition: 'background 0.15s ease'
+                  transition: 'background 0.15s ease',
+                  flexShrink: 0
                 }}
               >
-                <ArrowUp size={20} />
+                <Send size={16} />
               </button>
             </form>
-
-            <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '0.75rem', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
-              <span>EduQuery AI can make mistakes. Verify important academic info.</span>
-              <span style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px', border: '1px solid #e2e8f0', color: '#64748b' }}>
-                Return ↵ to send
-              </span>
-            </div>
           </div>
 
         </div>
 
-        {/* Right Active Sources Drawer */}
+        {/* Right Active Sources Drawer matching Reference Image */}
         <aside style={{
-          width: '320px',
-          minWidth: '320px',
+          width: '300px',
+          minWidth: '300px',
           background: '#ffffff',
           borderLeft: '1px solid #e2e8f0',
           padding: '24px 20px',
@@ -350,8 +427,8 @@ export default function ChatPage({ currentUser }) {
           gap: '16px',
           overflowY: 'auto'
         }}>
-          <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <BookOpen size={18} color="#1d4ed8" /> Active Sources
+          <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
+            Active Sources
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -361,33 +438,36 @@ export default function ChatPage({ currentUser }) {
                 style={{
                   background: '#ffffff',
                   border: '1px solid #e2e8f0',
-                  borderRadius: '10px',
-                  padding: '14px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+                  borderRadius: '12px',
+                  padding: '16px',
+                  boxShadow: '0 1px 3px rgba(15, 23, 42, 0.03)'
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <FileText size={16} color="#0b3bbd" />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>
+                      {source.document_title}
+                    </span>
+                  </div>
+
                   <span style={{
-                    background: source.category === 'HANDBOOK' ? '#0b3bbd' : source.category === 'SYLLABUS' ? '#0d9488' : '#7e22ce',
-                    color: '#ffffff',
-                    fontSize: '0.68rem',
+                    background: source.badge_color === 'blue' ? '#eff6ff' : '#dcfce7',
+                    color: source.badge_color === 'blue' ? '#1d4ed8' : '#15803d',
+                    fontSize: '0.75rem',
                     fontWeight: 700,
                     padding: '2px 8px',
-                    borderRadius: '4px'
+                    borderRadius: '999px'
                   }}>
-                    [{source.id || idx + 1}] {source.category || 'DOCUMENT'}
-                  </span>
-
-                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>
-                    {source.similarity_score || 95}% Match
+                    {source.similarity_score}%
                   </span>
                 </div>
 
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', marginBottom: '6px', lineHeight: 1.3 }}>
-                  {source.document_title}
+                <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginBottom: '6px' }}>
+                  {source.type_label || 'Document'}
                 </div>
 
-                <p style={{ fontSize: '0.78rem', color: '#64748b', lineHeight: 1.4, marginBottom: '10px' }}>
+                <p style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.45, marginBottom: '10px' }}>
                   {source.snippet}
                 </p>
 
@@ -396,17 +476,17 @@ export default function ChatPage({ currentUser }) {
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: '#1d4ed8',
-                    fontSize: '0.78rem',
-                    fontWeight: 600,
+                    color: '#0b3bbd',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
                     cursor: 'pointer',
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
                     gap: '4px',
                     padding: 0
                   }}
                 >
-                  View Document <ExternalLink size={12} />
+                  View source <ExternalLink size={12} />
                 </button>
               </div>
             ))}
@@ -415,7 +495,7 @@ export default function ChatPage({ currentUser }) {
 
       </div>
 
-      {/* Citation Modal */}
+      {/* Citation Detail Modal */}
       {activeCitationModal && (
         <div
           onClick={() => setActiveCitationModal(null)}
@@ -444,7 +524,7 @@ export default function ChatPage({ currentUser }) {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
               <div>
-                <span className="badge badge-purple" style={{ marginBottom: '6px' }}>{activeCitationModal.category}</span>
+                <span className="badge badge-purple" style={{ marginBottom: '6px' }}>{activeCitationModal.category || 'DOCUMENT'}</span>
                 <h3 style={{ fontSize: '1.2rem', color: '#0f172a' }}>{activeCitationModal.document_title}</h3>
               </div>
               <button onClick={() => setActiveCitationModal(null)} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
@@ -460,3 +540,4 @@ export default function ChatPage({ currentUser }) {
     </div>
   );
 }
+

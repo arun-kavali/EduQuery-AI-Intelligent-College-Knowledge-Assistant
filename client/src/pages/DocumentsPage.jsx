@@ -1,35 +1,62 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Search, SlidersHorizontal, FileText, Layers, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Search, Upload, FileText, Layers, RefreshCw, CheckCircle2, MoreVertical } from 'lucide-react';
 
 export default function DocumentsPage() {
   const [documents, setDocuments] = useState([
     {
       id: 'doc-1',
-      title: '2024 Undergraduate Admissions Prospectus',
-      category: 'Admissions',
-      department: 'Registrar',
+      title: 'Examination Regulations 2026',
+      category: 'Category',
+      department: 'Departments',
       status: 'INDEXED',
-      created_at: '2023-10-12',
-      chunk_count: 45
+      created_at: 'Uploaded 2026',
+      chunk_count: 35
     },
     {
       id: 'doc-2',
-      title: 'Faculty Code of Conduct V2.1',
-      category: 'Policies',
-      department: 'HR',
-      status: 'PROCESSING',
-      created_at: 'Just now',
-      chunk_count: null
+      title: 'Student Attendance Policy',
+      category: 'Category',
+      department: 'Departments',
+      status: 'INDEXED',
+      created_at: 'Uploaded 2024',
+      chunk_count: 24
     },
     {
       id: 'doc-3',
-      title: 'Tuition and Fee Schedule 2024-2025',
-      category: 'Fees',
-      department: 'Bursar',
+      title: 'Student Attendance Policy',
+      category: 'Category',
+      department: 'Departments',
       status: 'INDEXED',
-      created_at: '2023-10-10',
-      chunk_count: 12
+      created_at: 'Uploaded 2028',
+      chunk_count: 35
+    },
+    {
+      id: 'doc-4',
+      title: 'Student Attendance Policy',
+      category: 'Category',
+      department: 'Departments',
+      status: 'INDEXED',
+      created_at: 'Uploaded 2023',
+      chunk_count: 23
+    },
+    {
+      id: 'doc-5',
+      title: 'Examination Regulations 2026',
+      category: 'Category',
+      department: 'Departments',
+      status: 'INDEXED',
+      created_at: 'Uploaded 2024',
+      chunk_count: 35
+    },
+    {
+      id: 'doc-6',
+      title: 'Student Attendance Policy',
+      category: 'Category',
+      department: 'Departments',
+      status: 'INDEXED',
+      created_at: 'Uploaded 2023',
+      chunk_count: 35
     }
   ]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -38,7 +65,7 @@ export default function DocumentsPage() {
   const [selectedDocModal, setSelectedDocModal] = useState(null);
   const [modalChunks, setModalChunks] = useState([]);
 
-  const categories = ['All', 'Admissions', 'Academics', 'Fees', 'Policies'];
+  const categories = ['All', 'Admissions', 'Academics', 'Fees', 'Exams', 'Policies'];
 
   useEffect(() => {
     fetchDocuments();
@@ -51,7 +78,15 @@ export default function DocumentsPage() {
         params: { category: activeCategory, search: searchQuery }
       });
       if (res.data.success && res.data.documents.length > 0) {
-        setDocuments(res.data.documents);
+        setDocuments(res.data.documents.map(d => ({
+          ...d,
+          title: d.title || 'Institutional Document',
+          category: d.category || 'Category',
+          department: d.department || 'Departments',
+          status: d.status || 'INDEXED',
+          created_at: d.created_at ? `Uploaded ${d.created_at.slice(0, 4)}` : 'Uploaded 2026',
+          chunk_count: d.chunk_count || 35
+        })));
       }
     } catch (err) {
       console.error('Error fetching documents:', err);
@@ -79,81 +114,80 @@ export default function DocumentsPage() {
   });
 
   return (
-    <div style={{ padding: '36px 40px', background: '#f8fafc', minHeight: '100vh' }}>
+    <div style={{ padding: '32px 40px 80px', background: '#f8fafc', minHeight: '100vh' }}>
       
-      {/* Header Section */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>
-            College Knowledge Base
-          </h1>
-          <p style={{ color: '#64748b', fontSize: '0.95rem' }}>
-            Manage and search indexed institutional documents.
-          </p>
-        </div>
+      {/* Header Row matching Reference Image */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+          College Knowledge Base
+        </h1>
 
-        {/* Right Search Input & Filter Button */}
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <div style={{ position: 'relative', width: '280px' }}>
-            <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
+        {/* Right Search Bar & Upload Document Action Button */}
+        <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+          <div style={{ position: 'relative', width: '260px' }}>
+            <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
             <input
               type="text"
-              placeholder="Search documents..."
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="form-input"
-              style={{ paddingLeft: '38px', borderRadius: '8px', background: '#ffffff' }}
+              style={{ paddingLeft: '36px', borderRadius: '8px', background: '#ffffff', height: '38px', fontSize: '0.875rem' }}
             />
           </div>
 
-          <button style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '8px',
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: '#334155'
-          }}>
-            <SlidersHorizontal size={18} />
-          </button>
-        </div>
-      </div>
-
-      {/* Category Filter Pills Row */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '32px' }}>
-        {categories.map((cat) => (
           <button
-            key={cat}
-            onClick={() => setActiveCategory(cat)}
+            className="btn btn-primary"
             style={{
-              padding: '8px 20px',
-              borderRadius: '999px',
-              border: 'none',
-              background: activeCategory === cat ? '#1d4ed8' : '#ffffff',
-              color: activeCategory === cat ? '#ffffff' : '#475569',
-              boxShadow: activeCategory === cat ? '0 2px 6px rgba(29, 78, 216, 0.2)' : '0 1px 2px rgba(0,0,0,0.05)',
+              padding: '8px 18px',
+              borderRadius: '8px',
+              background: '#0b3bbd',
               fontWeight: 600,
               fontSize: '0.875rem',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease'
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 2px 6px rgba(11, 59, 189, 0.2)'
             }}
           >
-            {cat}
+            Upload Document
           </button>
-        ))}
+        </div>
       </div>
 
-      {/* Document Cards Grid */}
+      {/* Category Pills Row matching Reference Image */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '28px', flexWrap: 'wrap' }}>
+        {categories.map((cat) => {
+          const isSelected = activeCategory === cat;
+          return (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              style={{
+                padding: '6px 16px',
+                borderRadius: '999px',
+                border: isSelected ? 'none' : '1px solid #e2e8f0',
+                background: isSelected ? '#0f172a' : '#ffffff',
+                color: isSelected ? '#ffffff' : '#475569',
+                fontWeight: 600,
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              {cat}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Document Cards Grid matching Reference Image */}
       {isLoading ? (
-        <div style={{ padding: '60px', textAlign: 'center', color: '#1d4ed8' }}>
-          <RefreshCw size={24} className="animate-spin" /> Loading documents...
+        <div style={{ padding: '60px', textAlign: 'center', color: '#0b3bbd', fontWeight: 600 }}>
+          <RefreshCw size={24} className="animate-spin" /> Loading document index...
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
           {filteredDocs.map((doc) => (
             <div
               key={doc.id}
@@ -162,75 +196,66 @@ export default function DocumentsPage() {
                 background: '#ffffff',
                 border: '1px solid #e2e8f0',
                 borderRadius: '12px',
-                padding: '24px',
-                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+                padding: '20px',
+                boxShadow: '0 1px 3px rgba(15, 23, 42, 0.03)',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
                 cursor: 'pointer',
-                transition: 'all 0.15s ease'
+                transition: 'transform 0.15s ease, box-shadow 0.15s ease'
               }}
             >
               <div>
-                {/* Header Row: Icon & Status */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                {/* Top Row: Icon & Three Dots */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                   <div style={{
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '10px',
-                    background: '#f3e8ff',
-                    color: '#7e22ce',
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '8px',
+                    background: '#fef2f2',
+                    color: '#dc2626',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center'
                   }}>
-                    <FileText size={20} />
+                    <FileText size={18} />
                   </div>
 
-                  {doc.status === 'INDEXED' ? (
-                    <span style={{
-                      background: '#e0f2fe',
-                      color: '#0284c7',
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      padding: '3px 10px',
-                      borderRadius: '999px',
-                      letterSpacing: '0.04em'
-                    }}>
-                      INDEXED
-                    </span>
-                  ) : (
-                    <span style={{
-                      background: '#f1f5f9',
-                      color: '#64748b',
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      padding: '3px 10px',
-                      borderRadius: '999px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}>
-                      <RefreshCw size={12} className="animate-spin" /> PROCESSING
-                    </span>
-                  )}
+                  <button
+                    style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MoreVertical size={16} />
+                  </button>
                 </div>
 
-                {/* Title */}
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', marginBottom: '14px', lineHeight: 1.35 }}>
+                {/* Document Title */}
+                <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', marginBottom: '10px', lineHeight: 1.3 }}>
                   {doc.title}
                 </h3>
 
-                {/* Metadata Tag Pills */}
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '20px' }}>
-                  <span style={{ background: '#f1f5f9', color: '#475569', fontSize: '0.75rem', padding: '3px 10px', borderRadius: '4px', fontWeight: 500 }}>
-                    {doc.category}
+                {/* Sub Metadata Tags */}
+                <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, marginBottom: '14px', display: 'flex', gap: '8px' }}>
+                  <span>{doc.category}</span>
+                  <span>•</span>
+                  <span>{doc.department}</span>
+                </div>
+
+                {/* Chunk Count Badge */}
+                <div style={{ marginBottom: '18px' }}>
+                  <span style={{
+                    background: '#dcfce7',
+                    color: '#15803d',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    padding: '3px 10px',
+                    borderRadius: '6px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}>
+                    <CheckCircle2 size={12} /> {doc.chunk_count} Chunk
                   </span>
-                  {doc.department && (
-                    <span style={{ background: '#f1f5f9', color: '#475569', fontSize: '0.75rem', padding: '3px 10px', borderRadius: '4px', fontWeight: 500 }}>
-                      {doc.department}
-                    </span>
-                  )}
                 </div>
               </div>
 
@@ -239,16 +264,27 @@ export default function DocumentsPage() {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                paddingTop: '14px',
+                paddingTop: '12px',
                 borderTop: '1px solid #f1f5f9',
-                fontSize: '0.78rem',
-                color: '#94a3b8',
-                fontWeight: 500
+                fontSize: '0.75rem',
+                color: '#64748b',
+                fontWeight: 600
               }}>
-                <span>{doc.created_at}</span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Layers size={14} /> {doc.chunk_count !== null ? `${doc.chunk_count} Chunks` : '-- Chunks'}
+                <span style={{
+                  background: '#dcfce7',
+                  color: '#15803d',
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  <CheckCircle2 size={10} /> Indexed
                 </span>
+
+                <span>{doc.created_at}</span>
               </div>
 
             </div>
@@ -256,7 +292,7 @@ export default function DocumentsPage() {
         </div>
       )}
 
-      {/* Modal for viewing vector chunks */}
+      {/* Modal for inspecting vector chunks */}
       {selectedDocModal && (
         <div
           onClick={() => setSelectedDocModal(null)}
@@ -277,7 +313,7 @@ export default function DocumentsPage() {
             style={{
               background: '#ffffff',
               borderRadius: '16px',
-              maxWidth: '650px',
+              maxWidth: '620px',
               width: '100%',
               padding: '28px',
               maxHeight: '80vh',
@@ -288,7 +324,7 @@ export default function DocumentsPage() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
               <div>
-                <h3 style={{ fontSize: '1.2rem', color: '#0f172a' }}>{selectedDocModal.title}</h3>
+                <h3 style={{ fontSize: '1.2rem', color: '#0f172a', fontWeight: 800 }}>{selectedDocModal.title}</h3>
                 <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>
                   Status: {selectedDocModal.status} | Total Chunks: {selectedDocModal.chunk_count || 0}
                 </div>
@@ -304,7 +340,7 @@ export default function DocumentsPage() {
               ) : (
                 modalChunks.map((c, i) => (
                   <div key={i} style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#1d4ed8', marginBottom: '4px' }}>CHUNK #{c.chunk_index}</div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0b3bbd', marginBottom: '4px' }}>CHUNK #{c.chunk_index}</div>
                     <div style={{ fontSize: '0.85rem', color: '#334155' }}>{c.content}</div>
                   </div>
                 ))
@@ -317,3 +353,4 @@ export default function DocumentsPage() {
     </div>
   );
 }
+

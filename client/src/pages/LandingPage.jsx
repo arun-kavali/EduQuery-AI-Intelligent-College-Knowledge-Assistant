@@ -1,147 +1,219 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, User, Cpu, Database, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, FileText, Cpu, Database, MessageSquare, ShieldCheck, Sparkles, Star } from 'lucide-react';
 
 export default function LandingPage() {
   return (
-    <div style={{ background: '#f8fafc', minHeight: 'calc(100vh - 72px)', padding: '60px 40px 100px' }}>
-      <div style={{ maxWidth: '1240px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '60px', alignItems: 'center' }}>
+    <div style={{ background: '#f8fafc', minHeight: 'calc(100vh - 72px)', padding: '60px 48px 100px' }}>
+      <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
         
-        {/* Left Column: Hero Content */}
-        <div>
-          <h1 style={{ fontSize: '3.6rem', fontWeight: 800, lineHeight: 1.15, color: '#0f172a', marginBottom: '24px', letterSpacing: '-0.03em' }}>
-            Ask Your College. <br />
-            <span style={{ color: '#1d4ed8' }}>Get Verified Answers.</span>
-          </h1>
+        {/* Main Hero Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '60px', alignItems: 'center', marginBottom: '80px' }}>
+          
+          {/* Left Column: Headline & Action Buttons */}
+          <div>
+            <h1 style={{ fontSize: '3.6rem', fontWeight: 800, lineHeight: 1.15, color: '#0f172a', marginBottom: '20px', letterSpacing: '-0.03em' }}>
+              Ask Your College. <br />
+              <span>Get Verified Answers.</span>
+            </h1>
 
-          <p style={{ fontSize: '1.15rem', color: '#475569', lineHeight: 1.6, marginBottom: '36px', maxWidth: '540px' }}>
-            Elevate academic research with high-fidelity information retrieval. Access deeply grounded answers sourced directly from verified institutional documents and peer-reviewed knowledge bases.
-          </p>
+            <p style={{ fontSize: '1.1rem', color: '#475569', lineHeight: 1.6, marginBottom: '36px', maxWidth: '520px' }}>
+              EduQuery AI — Intelligent College Knowledge Assistant for fast and safe application.
+            </p>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '56px' }}>
-            <Link 
-              to="/chat" 
-              className="btn btn-primary" 
-              style={{ padding: '14px 28px', fontSize: '1rem', borderRadius: '8px', background: '#0b3bbd', display: 'flex', alignItems: 'center', gap: '8px' }}
-            >
-              Start Researching <ArrowRight size={18} />
-            </Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <Link 
+                to="/chat" 
+                className="btn btn-primary" 
+                style={{ padding: '14px 28px', fontSize: '0.95rem', borderRadius: '8px', background: '#0b3bbd', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(11, 59, 189, 0.25)' }}
+              >
+                Start Researching <ArrowRight size={18} />
+              </Link>
 
-            <Link 
-              to="/auth" 
-              className="btn btn-secondary" 
-              style={{ padding: '14px 24px', fontSize: '1rem', borderRadius: '8px', background: '#ffffff', border: '1px solid #e2e8f0', color: '#334155' }}
-            >
-              Request Demo
-            </Link>
-          </div>
-
-          {/* Key Statistics */}
-          <div style={{ display: 'flex', gap: '48px', paddingTop: '24px', borderTop: '1px solid #e2e8f0' }}>
-            <div>
-              <div style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>10,000+</div>
-              <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '6px', fontWeight: 500 }}>Grounded AI Answers</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>500+</div>
-              <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '6px', fontWeight: 500 }}>Verified Document Sources</div>
+              <Link 
+                to="/documents" 
+                className="btn btn-secondary" 
+                style={{ padding: '14px 24px', fontSize: '0.95rem', borderRadius: '8px', background: '#ffffff', border: '1px solid #cbd5e1', color: '#334155' }}
+              >
+                Explore Platform
+              </Link>
             </div>
           </div>
-        </div>
 
-        {/* Right Column: Visual Diagram Container */}
-        <div style={{
-          background: '#ffffff',
-          borderRadius: '16px',
-          border: '1px solid #e2e8f0',
-          boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
-          padding: '50px 40px',
-          minHeight: '420px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          position: 'relative'
-        }}>
-          <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
-            
-            {/* Dashed connector line background */}
-            <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1 }}>
-              <path d="M 110 130 C 170 130, 170 130, 210 130" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="2" fill="none" />
-              <path d="M 330 130 C 370 70, 370 70, 410 70" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="2" fill="none" />
-              <path d="M 330 130 C 370 190, 370 190, 410 190" stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="2" fill="none" />
-            </svg>
-
-            {/* Node 1: Student Query */}
-            <div style={{
-              zIndex: 2,
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
-              borderRadius: '12px',
-              padding: '24px 20px',
-              width: '130px',
-              textAlign: 'center',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-            }}>
-              <div style={{ width: '40px', height: '40px', background: '#2563eb', borderRadius: '10px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-                <User size={20} />
-              </div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>Student Query</div>
+          {/* Right Column: Visual RAG Architecture Card Container */}
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '16px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 8px 30px rgba(15, 23, 42, 0.06)',
+            padding: '36px 32px',
+            position: 'relative'
+          }}>
+            {/* Header Badge */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '24px' }}>
+              <span style={{
+                background: '#f1f5f9',
+                border: '1px solid #e2e8f0',
+                padding: '4px 12px',
+                borderRadius: '6px',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                color: '#64748b'
+              }}>
+                RAG architecture
+              </span>
             </div>
 
-            {/* Node 2: AI Retrieval Engine (Center) */}
-            <div style={{
-              zIndex: 2,
-              background: '#ffffff',
-              border: '2px solid #2563eb',
-              borderRadius: '12px',
-              padding: '24px 16px',
-              width: '160px',
-              textAlign: 'center',
-              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.15)'
-            }}>
-              <div style={{ width: '48px', height: '48px', background: '#0b3bbd', borderRadius: '12px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-                <Cpu size={24} />
-              </div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1d4ed8' }}>AI Retrieval Engine</div>
-            </div>
+            {/* Diagram Flow Container */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', alignItems: 'center' }}>
+              
+              {/* Horizontal Process Nodes */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '16px' }}>
+                
+                {/* Node 1: Extract */}
+                <div style={{
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '12px',
+                  padding: '16px 14px',
+                  textAlign: 'center',
+                  flex: 1,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+                }}>
+                  <div style={{ width: '36px', height: '36px', background: '#eff6ff', color: '#1d4ed8', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px' }}>
+                    <FileText size={18} />
+                  </div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Extract</div>
+                </div>
 
-            {/* Right Side Stack: Knowledge Base & Verified Answer */}
-            <div style={{ zIndex: 2, display: 'flex', flexDirection: 'column', gap: '32px' }}>
-              {/* Knowledge Base */}
+                <div style={{ color: '#cbd5e1', fontWeight: 800 }}>→</div>
+
+                {/* Node 2: Center RAG Box */}
+                <div style={{
+                  background: '#f3e8ff',
+                  border: '2px solid #a855f7',
+                  borderRadius: '14px',
+                  padding: '18px 16px',
+                  textAlign: 'center',
+                  flex: 1.2,
+                  boxShadow: '0 4px 14px rgba(168, 85, 247, 0.15)'
+                }}>
+                  <div style={{ width: '40px', height: '40px', background: '#7e22ce', color: '#ffffff', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px' }}>
+                    <Cpu size={20} />
+                  </div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#7e22ce' }}>RAG</div>
+                </div>
+
+                <div style={{ color: '#cbd5e1', fontWeight: 800 }}>→</div>
+
+                {/* Node 3: Embed */}
+                <div style={{
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '12px',
+                  padding: '16px 14px',
+                  textAlign: 'center',
+                  flex: 1,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+                }}>
+                  <div style={{ width: '36px', height: '36px', background: '#eff6ff', color: '#1d4ed8', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px' }}>
+                    <Database size={18} />
+                  </div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Embed</div>
+                </div>
+
+              </div>
+
+              {/* Bottom Output Connector */}
               <div style={{
                 background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '12px',
-                padding: '16px 20px',
-                width: '150px',
-                textAlign: 'center'
+                border: '1px dashed #cbd5e1',
+                borderRadius: '24px',
+                padding: '10px 24px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontSize: '0.825rem',
+                color: '#475569',
+                fontWeight: 600
               }}>
-                <div style={{ width: '36px', height: '36px', background: '#7e22ce', borderRadius: '8px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px' }}>
-                  <Database size={18} />
-                </div>
-                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Knowledge Base</div>
+                <MessageSquare size={16} color="#7e22ce" />
+                <span>AI conversation</span>
               </div>
 
-              {/* Verified Answer */}
-              <div style={{
-                background: '#eff6ff',
-                border: '1px solid #bfdbfe',
-                borderRadius: '12px',
-                padding: '16px 20px',
-                width: '150px',
-                textAlign: 'center'
-              }}>
-                <div style={{ width: '36px', height: '36px', background: '#2563eb', borderRadius: '8px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px' }}>
-                  <CheckCircle2 size={18} />
-                </div>
-                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1d4ed8' }}>Verified Answer</div>
-              </div>
             </div>
-
           </div>
+
+        </div>
+
+        {/* Bottom Feature Cards Row (3 Cards) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+          
+          {/* Card 1 */}
+          <div style={{
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            borderRadius: '14px',
+            padding: '28px 24px',
+            boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)',
+            transition: 'transform 0.15s ease'
+          }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#eff6ff', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+              <ShieldCheck size={20} />
+            </div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>
+              Ask Verified College
+            </h3>
+            <p style={{ fontSize: '0.875rem', color: '#64748b', lineHeight: 1.5 }}>
+              Ask more about admin regulations and get verified grounded answers.
+            </p>
+          </div>
+
+          {/* Card 2 */}
+          <div style={{
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            borderRadius: '14px',
+            padding: '28px 24px',
+            boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)',
+            transition: 'transform 0.15s ease'
+          }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#f3e8ff', color: '#7e22ce', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+              <Sparkles size={20} />
+            </div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>
+              Features Platform
+            </h3>
+            <p style={{ fontSize: '0.875rem', color: '#64748b', lineHeight: 1.5 }}>
+              Complete your web service research releasing live features.
+            </p>
+          </div>
+
+          {/* Card 3 */}
+          <div style={{
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            borderRadius: '14px',
+            padding: '28px 24px',
+            boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)',
+            transition: 'transform 0.15s ease'
+          }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#dcfce7', color: '#15803d', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+              <Star size={20} />
+            </div>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>
+              Average Feedback
+            </h3>
+            <p style={{ fontSize: '0.875rem', color: '#64748b', lineHeight: 1.5 }}>
+              High overall answer accuracy supported by citations.
+            </p>
+          </div>
+
         </div>
 
       </div>
     </div>
   );
 }
+
+
