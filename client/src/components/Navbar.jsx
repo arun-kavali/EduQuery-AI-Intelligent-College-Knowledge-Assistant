@@ -1,8 +1,10 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { ChevronDown } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ChevronDown, LogOut, User, LayoutDashboard } from 'lucide-react';
 
-export default function Navbar({ currentUser, setCurrentUser }) {
+export default function Navbar({ currentUser, handleLogout }) {
+  const navigate = useNavigate();
+
   return (
     <header style={{
       background: '#ffffff',
@@ -21,13 +23,12 @@ export default function Navbar({ currentUser, setCurrentUser }) {
         <img
           src="https://res.cloudinary.com/dvakxuk58/image/upload/v1788005318/IMG_20260829_173724_xw36nc.png"
           alt="EduQuery AI Logo"
-          style={{ width: '34px', height: '34px', objectFit: 'contain', borderRadius: '8px' }}
+          style={{ width: '34px', height: '34px', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 2px 6px rgba(11, 59, 189, 0.25)' }}
         />
         <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
           EduQuery AI
         </span>
       </Link>
-
 
       {/* Nav Links */}
       <nav style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
@@ -42,52 +43,89 @@ export default function Navbar({ currentUser, setCurrentUser }) {
         }}>
           Platform <ChevronDown size={14} color="#64748b" />
         </Link>
-        <a href="#resources" style={{
+        <Link to="/documents" style={{
           color: '#475569',
           fontWeight: 500,
           fontSize: '0.9rem',
-          textDecoration: 'none',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px'
+          textDecoration: 'none'
         }}>
-          Resources <ChevronDown size={14} color="#64748b" />
-        </a>
-        <a href="#pricing" style={{ color: '#475569', fontWeight: 500, fontSize: '0.9rem', textDecoration: 'none' }}>
-          Pricing
-        </a>
-        <a href="#about" style={{ color: '#475569', fontWeight: 500, fontSize: '0.9rem', textDecoration: 'none' }}>
-          About
-        </a>
+          Document Hub
+        </Link>
+        <Link to="/chat" style={{ color: '#475569', fontWeight: 500, fontSize: '0.9rem', textDecoration: 'none' }}>
+          AI Chat
+        </Link>
       </nav>
 
       {/* Auth Action Buttons */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <Link 
-          to="/auth" 
-          style={{
-            color: '#334155',
-            fontWeight: 600,
-            fontSize: '0.875rem',
-            textDecoration: 'none',
-            padding: '8px 16px',
-            borderRadius: '6px',
-            background: '#f8fafc',
-            border: '1px solid #e2e8f0'
-          }}
-        >
-          Sign in
-        </Link>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        {currentUser ? (
+          <>
+            <button
+              onClick={() => navigate(currentUser.role === 'admin' ? '/admin' : '/chat')}
+              className="btn btn-primary"
+              style={{
+                padding: '8px 18px',
+                borderRadius: '8px',
+                background: '#0b3bbd',
+                fontSize: '0.875rem',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 6px rgba(11, 59, 189, 0.2)'
+              }}
+            >
+              <LayoutDashboard size={16} /> Open Workspace
+            </button>
 
-        <Link 
-          to="/auth" 
-          className="btn btn-primary" 
-          style={{ padding: '8px 20px', borderRadius: '6px', fontSize: '0.875rem', fontWeight: 600, background: '#0b3bbd' }}
-        >
-          Get Started
-        </Link>
+            <button
+              onClick={handleLogout}
+              title="Sign Out"
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '8px 14px',
+                color: '#475569',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <LogOut size={15} /> Sign Out
+            </button>
+          </>
+        ) : (
+          <>
+            <Link 
+              to="/auth" 
+              style={{
+                color: '#334155',
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                textDecoration: 'none',
+                padding: '8px 16px',
+                borderRadius: '6px',
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0'
+              }}
+            >
+              Sign in
+            </Link>
+
+            <Link 
+              to="/auth" 
+              className="btn btn-primary" 
+              style={{ padding: '8px 20px', borderRadius: '6px', fontSize: '0.875rem', fontWeight: 600, background: '#0b3bbd' }}
+            >
+              Get Started
+            </Link>
+          </>
+        )}
       </div>
     </header>
   );
 }
-

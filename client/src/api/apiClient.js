@@ -13,13 +13,18 @@ const apiClient = axios.create({
   }
 });
 
-// Request interceptor to attach auth headers and normalize URLs
+// Request interceptor to attach auth headers, normalize URLs, and handle FormData boundaries
 apiClient.interceptors.request.use((config) => {
   if (config.url) {
     config.url = config.url.replace(/^\/?api\//, '/');
   }
 
-  // Retrieve user session or role from localStorage if present
+  // If payload is FormData, remove Content-Type to allow browser boundary auto-generation
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
+
+  // Retrieve authenticated user token from localStorage if present
   try {
     const storedUser = localStorage.getItem('eduquery_user');
     if (storedUser) {
@@ -35,11 +40,10 @@ apiClient.interceptors.request.use((config) => {
       }
     }
   } catch (e) {
-    // Ignore parse errors
+    // Ignore JSON parse errors
   }
 
   return config;
 });
 
 export default apiClient;
-

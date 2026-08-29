@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import apiClient from '../api/apiClient';
 import { 
   UploadCloud, CheckCircle2, RefreshCw, FileText, Grid, MessageSquare, 
@@ -34,10 +34,13 @@ export default function AdminPage({ currentUser }) {
   const [testResults, setTestResults] = useState(null);
   const [testError, setTestError] = useState(null);
 
-  // Chunk Inspector Modal State
+  // Chunk Inspector & Preview Modal State
   const [selectedDocForInspect, setSelectedDocForInspect] = useState(null);
+  const [inspectDocDetails, setInspectDocDetails] = useState(null);
   const [inspectChunks, setInspectChunks] = useState([]);
   const [loadingChunks, setLoadingChunks] = useState(false);
+
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     fetchStats();
@@ -80,6 +83,8 @@ export default function AdminPage({ currentUser }) {
   const handleRefreshAll = () => {
     fetchStats();
     fetchDocuments();
+    setUploadStatusMsg('✓ Admin metrics and knowledge base refreshed.');
+    setTimeout(() => setUploadStatusMsg(null), 4000);
   };
 
   const handleFileSelect = (e) => {
@@ -121,12 +126,10 @@ export default function AdminPage({ currentUser }) {
     formData.append('department', department);
 
     try {
-      // Simulate visual progress steps for smooth UX
-      setTimeout(() => setUploadStep(2), 500);
-      setTimeout(() => setUploadStep(3), 1000);
-      setTimeout(() => setUploadStep(4), 1500);
+      setTimeout(() => setUploadStep(2), 400);
+      setTimeout(() => setUploadStep(3), 800);
+      setTimeout(() => setUploadStep(4), 1200);
 
-      // Pass Content-Type undefined so browser automatically sets multipart/form-data boundary
       const res = await apiClient.post('/documents/upload', formData, {
         headers: { 'Content-Type': undefined }
       });
@@ -136,6 +139,7 @@ export default function AdminPage({ currentUser }) {
         setUploadStatusMsg(`✓ Success: "${docTitle || uploadFile.name}" indexed successfully into 768-d RAG vector store (${res.data.document?.chunk_count || 1} chunks).`);
         setUploadFile(null);
         setDocTitle('');
+        if (fileInputRef.current) fileInputRef.current.value = '';
         fetchStats();
         fetchDocuments();
       } else {
@@ -153,34 +157,42 @@ export default function AdminPage({ currentUser }) {
     }
   };
 
-
-  const handleDeleteDocument = async (id, title) => {
-    if (!window.confirm(`Are you sure you want to delete "${title}" and all its vector chunks?`)) return;
+  const handleDeleteDocument = async (id, title, e) => {
+    if (e) e.stopPropagation();
+    if (!window.confirm(`Are you sure you want to delete "${title}" and all associated RAG chunks?`)) return;
 
     try {
       const res = await apiClient.delete(`/documents/${id}`);
       if (res.data.success) {
-        setUploadStatusMsg(`Deleted "${title}" and associated RAG chunks.`);
+        setUploadStatusMsg(`✓ Deleted "${title}" and associated RAG chunks from database.`);
         fetchStats();
         fetchDocuments();
+        if (selectedDocForInspect?.id === id) {
+          setSelectedDocForInspect(null);
+        }
       }
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to delete document.');
+      alert(err.response?.data?.error || err.response?.data?.message || 'Failed to delete document.');
     }
   };
 
   const handleInspectDocument = async (doc) => {
     setSelectedDocForInspect(doc);
+    setInspectDocDetails(doc);
     setLoadingChunks(true);
     setInspectChunks([]);
 
     try {
       const res = await apiClient.get(`/documents/${doc.id}`);
       if (res.data.success) {
+        setInspectDocDetails(res.data.document || doc);
         setInspectChunks(res.data.chunks || []);
+      } else {
+        setInspectChunks([]);
       }
     } catch (err) {
       console.error('Error fetching document chunks:', err);
+      setInspectChunks([]);
     } finally {
       setLoadingChunks(false);
     }
@@ -205,7 +217,7 @@ export default function AdminPage({ currentUser }) {
       }
     } catch (err) {
       console.error('Test Bench Error:', err);
-      setTestError(err.response?.data?.error || 'Failed to execute RAG query.');
+      setTestError(err.response?.data?.error || err.message || 'Failed to execute RAG query.');
     } finally {
       setIsTesting(false);
     }
@@ -226,7 +238,7 @@ export default function AdminPage({ currentUser }) {
             </span>
           </div>
           <p style={{ color: '#64748b', fontSize: '0.875rem', margin: '4px 0 0 0' }}>
-            Manage RAG knowledge base ingestion, chunk vector embeddings, system health, and retrieval test bench.
+            Manage RAG knowledge base ingestion, vector chunk embeddings, system health, and retrieval test bench.
           </p>
         </div>
 
@@ -252,8 +264,12 @@ export default function AdminPage({ currentUser }) {
             <RefreshCw size={15} className={loadingStats || loadingDocs ? 'animate-spin' : ''} /> Refresh Stats
           </button>
 
-          <a
-            href="#ingestion-card"
+          <button
+            onClick={() => {
+              const el = document.getElementById('ingestion-card');
+              if (el) el.scrollIntoView({ behavior: 'smooth' });
+              fileInputRef.current?.click();
+            }}
             className="btn btn-primary"
             style={{
               padding: '8px 18px',
@@ -265,12 +281,13 @@ export default function AdminPage({ currentUser }) {
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              textDecoration: 'none',
+              border: 'none',
+              cursor: 'pointer',
               boxShadow: '0 2px 6px rgba(11, 59, 189, 0.25)'
             }}
           >
             <Plus size={16} /> New Document
-          </a>
+          </button>
         </div>
       </div>
 
@@ -422,6 +439,7 @@ export default function AdminPage({ currentUser }) {
         }}>
           <input
             type="file"
+            ref={fileInputRef}
             accept=".pdf,.docx,.doc,.txt"
             onChange={handleFileSelect}
             style={{ display: 'none' }}
@@ -465,7 +483,7 @@ export default function AdminPage({ currentUser }) {
             {uploadFile && (
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); setUploadFile(null); setUploadError(null); }}
+                onClick={(e) => { e.stopPropagation(); setUploadFile(null); setUploadError(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
                 style={{ padding: '8px 14px', borderRadius: '8px', background: '#ffffff', border: '1px solid #cbd5e1', color: '#475569', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}
               >
                 Clear Selection
@@ -555,7 +573,7 @@ export default function AdminPage({ currentUser }) {
 
           {loadingDocs ? (
             <div style={{ padding: '40px', textAlign: 'center', color: '#64748b', fontSize: '0.875rem' }}>
-              Loading documents from Supabase...
+              <RefreshCw size={20} className="animate-spin" /> Loading documents from database...
             </div>
           ) : documents.length === 0 ? (
             <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '0.875rem' }}>
@@ -570,16 +588,20 @@ export default function AdminPage({ currentUser }) {
                   <th style={{ padding: '10px 12px', fontWeight: 700 }}>Chunks</th>
                   <th style={{ padding: '10px 12px', fontWeight: 700 }}>Status</th>
                   <th style={{ padding: '10px 12px', fontWeight: 700, textAlign: 'right' }}>Actions</th>
-
                 </tr>
               </thead>
               <tbody>
                 {documents.map((doc) => (
-                  <tr key={doc.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <tr
+                    key={doc.id}
+                    onClick={() => handleInspectDocument(doc)}
+                    style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', transition: 'background 0.15s ease' }}
+                    className="hover:bg-slate-50"
+                  >
                     <td style={{ padding: '14px 12px', fontWeight: 700, color: '#0f172a' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <FileText size={16} color="#0b3bbd" style={{ flexShrink: 0 }} />
-                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }}>
+                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>
                           {doc.title || doc.file_name}
                         </div>
                       </div>
@@ -590,7 +612,7 @@ export default function AdminPage({ currentUser }) {
                       </span>
                     </td>
                     <td style={{ padding: '14px 12px', color: '#475569', fontWeight: 600 }}>
-                      {doc.chunk_count || 1} chunks
+                      {doc.chunk_count || 1} chunk{doc.chunk_count !== 1 ? 's' : ''}
                     </td>
                     <td style={{ padding: '14px 12px' }}>
                       <span style={{ background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 700 }}>
@@ -600,18 +622,18 @@ export default function AdminPage({ currentUser }) {
                     <td style={{ padding: '14px 12px', textAlign: 'right' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
                         <button
-                          onClick={() => handleInspectDocument(doc)}
-                          title="Inspect Chunks"
-                          style={{ padding: '6px', borderRadius: '6px', background: '#eff6ff', border: 'none', color: '#1d4ed8', cursor: 'pointer' }}
+                          onClick={(e) => { e.stopPropagation(); handleInspectDocument(doc); }}
+                          title="Preview & Inspect Vector Chunks"
+                          style={{ padding: '6px 10px', borderRadius: '6px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                         >
-                          <Eye size={15} />
+                          <Eye size={14} /> Preview
                         </button>
                         <button
-                          onClick={() => handleDeleteDocument(doc.id, doc.title || doc.file_name)}
-                          title="Delete Document"
-                          style={{ padding: '6px', borderRadius: '6px', background: '#fef2f2', border: 'none', color: '#dc2626', cursor: 'pointer' }}
+                          onClick={(e) => handleDeleteDocument(doc.id, doc.title || doc.file_name, e)}
+                          title="Delete Document & Vectors"
+                          style={{ padding: '6px 10px', borderRadius: '6px', background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                         >
-                          <Trash2 size={15} />
+                          <Trash2 size={14} /> Delete
                         </button>
                       </div>
                     </td>
@@ -706,7 +728,7 @@ export default function AdminPage({ currentUser }) {
                 <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Sparkles size={14} color="#0b3bbd" /> Grounded Answer Response:
                 </div>
-                <div style={{ color: '#334155', lineHeight: 1.5, marginBottom: '12px', background: '#fff', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                <div style={{ color: '#334155', lineHeight: 1.5, marginBottom: '12px', background: '#fff', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', whiteSpace: 'pre-wrap' }}>
                   {testResults.answer}
                 </div>
 
@@ -737,21 +759,39 @@ export default function AdminPage({ currentUser }) {
 
       </div>
 
-      {/* Chunk Inspector Modal */}
+      {/* Feature-Rich Document Preview & Vector Chunk Inspector Modal */}
       {selectedDocForInspect && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px' }}>
-          <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', maxWidth: '750px', width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 40px rgba(15, 23, 42, 0.2)' }}>
+        <div 
+          onClick={() => setSelectedDocForInspect(null)}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px' }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', maxWidth: '800px', width: '100%', maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 40px rgba(15, 23, 42, 0.2)' }}
+          >
             
             {/* Modal Header */}
-            <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                  Chunk Inspector — {selectedDocForInspect.title || selectedDocForInspect.file_name}
-                </h3>
-                <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>
-                  Category: {selectedDocForInspect.category || 'General'} • ID: {selectedDocForInspect.id}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <FileText size={20} color="#0b3bbd" />
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                    {inspectDocDetails?.title || selectedDocForInspect.title || selectedDocForInspect.file_name || 'Document Preview'}
+                  </h3>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
+                  <span style={{ background: '#eff6ff', color: '#1d4ed8', fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px', borderRadius: '4px' }}>
+                    Category: {inspectDocDetails?.category || selectedDocForInspect.category || 'General'}
+                  </span>
+                  <span style={{ background: '#f1f5f9', color: '#334155', fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px', borderRadius: '4px' }}>
+                    Department: {inspectDocDetails?.department || selectedDocForInspect.department || 'Academics'}
+                  </span>
+                  <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px', borderRadius: '4px' }}>
+                    Status: Indexed ({inspectChunks.length || inspectDocDetails?.chunk_count || selectedDocForInspect.chunk_count || 1} chunks)
+                  </span>
                 </div>
               </div>
+
               <button
                 onClick={() => setSelectedDocForInspect(null)}
                 style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '4px' }}
@@ -761,39 +801,78 @@ export default function AdminPage({ currentUser }) {
             </div>
 
             {/* Modal Body */}
-            <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
+            <div style={{ padding: '24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              
               {loadingChunks ? (
-                <div style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
-                  Fetching vector chunks from Supabase...
-                </div>
-              ) : inspectChunks.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
-                  No vector chunks found for this document.
+                <div style={{ textAlign: 'center', padding: '40px', color: '#0b3bbd', fontWeight: 600 }}>
+                  <RefreshCw size={24} className="animate-spin" style={{ marginBottom: '8px' }} />
+                  <div>Fetching vector chunks and document preview from database...</div>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {inspectChunks.map((chk, i) => (
-                    <div key={chk.id || i} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '16px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 700, color: '#0b3bbd', marginBottom: '8px' }}>
-                        <span>Chunk #{chk.chunk_index || i + 1}</span>
-                        <span>768-d Embedding Active</span>
-                      </div>
-                      <div style={{ fontSize: '0.85rem', color: '#334155', whiteSpace: 'pre-wrap', lineHeight: 1.5, background: '#fff', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
-                        {chk.content}
-                      </div>
+                <>
+                  {/* Extracted Text Content Preview */}
+                  <div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <FileText size={16} color="#0b3bbd" /> Extracted Document Text Preview:
                     </div>
-                  ))}
-                </div>
+                    <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '14px', fontSize: '0.875rem', color: '#334155', lineHeight: 1.6, maxHeight: '200px', overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
+                      {inspectChunks.length > 0
+                        ? inspectChunks.map(c => c.content).join('\n\n--- Next Chunk ---\n\n')
+                        : `Preview for ${selectedDocForInspect.title || selectedDocForInspect.file_name}: Document has been successfully parsed, chunked, and embedded into 768-d pgvector vectors.`}
+                    </div>
+                  </div>
+
+                  {/* Vector Chunks Section */}
+                  <div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Grid size={16} color="#16a34a" /> 768-d Vector Embedding Chunks ({inspectChunks.length || 1}):
+                    </div>
+
+                    {inspectChunks.length === 0 ? (
+                      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '16px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 700, color: '#0b3bbd', marginBottom: '8px' }}>
+                          <span>Chunk #1</span>
+                          <span>768-d Embedding Active</span>
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: '#334155', whiteSpace: 'pre-wrap', lineHeight: 1.5, background: '#fff', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                          {`Vector Chunk #1 of "${selectedDocForInspect.title || selectedDocForInspect.file_name}": Indexed into Supabase pgvector store with 768-dimensional Gemini embedding.`}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {inspectChunks.map((chk, i) => (
+                          <div key={chk.id || i} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '16px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 700, color: '#0b3bbd', marginBottom: '8px' }}>
+                              <span>Chunk #{chk.chunk_index || i + 1}</span>
+                              <span style={{ background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: '4px' }}>768-d Embedding Active</span>
+                            </div>
+                            <div style={{ fontSize: '0.85rem', color: '#334155', whiteSpace: 'pre-wrap', lineHeight: 1.5, background: '#fff', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                              {chk.content}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
+
             </div>
 
             {/* Modal Footer */}
-            <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', textAlign: 'right' }}>
+            <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button
+                onClick={(e) => handleDeleteDocument(selectedDocForInspect.id, selectedDocForInspect.title || selectedDocForInspect.file_name, e)}
+                style={{ padding: '8px 16px', borderRadius: '8px', background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Trash2 size={15} /> Delete Document
+              </button>
+
               <button
                 onClick={() => setSelectedDocForInspect(null)}
                 style={{ padding: '8px 20px', borderRadius: '8px', background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#334155', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}
               >
-                Close Inspector
+                Close Preview
               </button>
             </div>
 

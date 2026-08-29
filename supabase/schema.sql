@@ -1,83 +1,122 @@
--- =========================================================
--- EduQuery AI - Supabase Production Database Schema
--- Includes Vector Search (pgvector), RLS Policies & Triggers
--- =========================================================
+-- ====================================================================
+-- EduQuery AI — Database Schema Specification (Supabase PostgreSQL + pgvector)
+-- ====================================================================
 
--- Enable pgvector extension
+-- 1. Enable vector extension
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- 1. Profiles Table
+-- 2. Profiles Table (Linked to auth.users.id)
 CREATE TABLE IF NOT EXISTS public.profiles (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT UNIQUE NOT NULL,
   full_name TEXT,
-  role TEXT DEFAULT 'student' CHECK (role IN ('student', 'faculty', 'admin')),
+  role TEXT NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'admin')),
   avatar_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Documents Table
+-- 3. Departments Table
+CREATE TABLE IF NOT EXISTS public.departments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT UNIQUE NOT NULL,
+  code TEXT UNIQUE NOT NULL,
+  description TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. Documents Table (Admin-uploaded college knowledge base documents)
 CREATE TABLE IF NOT EXISTS public.documents (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title TEXT NOT NULL,
-  file_name TEXT NOT NULL,
+  description TEXT,
+  original_file_name TEXT,
+  file_name TEXT,
+  file_path TEXT,
   file_type TEXT NOT NULL,
-  file_path TEXT NOT NULL,
-  file_size INT NOT NULL,
-  category TEXT DEFAULT 'General' CHECK (category IN ('Admissions', 'Academics', 'Departments', 'Courses', 'Fees', 'Examinations', 'Hostel', 'Library', 'Clubs', 'Placements', 'Scholarships', 'Policies', 'Events', 'Notices', 'General')),
+  file_size INTEGER,
+  category TEXT DEFAULT 'General',
   department TEXT DEFAULT 'General',
-  uploaded_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  chunk_count INT DEFAULT 0,
-  status TEXT DEFAULT 'processed' CHECK (status IN ('processing', 'processed', 'failed')),
-  error_message TEXT,
+  processing_status TEXT DEFAULT 'uploaded' CHECK (processing_status IN ('uploaded', 'processing', 'processed', 'indexed', 'failed')),
+  processing_error TEXT,
+  chunk_count INTEGER DEFAULT 0,
+  version INTEGER DEFAULT 1,
+  uploaded_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. Document Chunks Table (Vector Storage)
+-- 5. Document Chunks Table (768-d Gemini Embeddings)
 CREATE TABLE IF NOT EXISTS public.document_chunks (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  document_id UUID REFERENCES public.documents(id) ON DELETE CASCADE,
-  chunk_index INT NOT NULL,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id UUID NOT NULL REFERENCES public.documents(id) ON DELETE CASCADE,
+  chunk_index INTEGER NOT NULL,
   content TEXT NOT NULL,
-  embedding vector(768), -- Fixed dimension to 768 for text-embedding-004
+  embedding vector(768),
   metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- HNSW Cosine Similarity Index
-CREATE INDEX IF NOT EXISTS document_chunks_embedding_hnsw_idx 
-ON public.document_chunks 
-USING hnsw (embedding vector_cosine_ops);
-
--- 4. Conversations Table
+-- 6. Conversations Table (User-isolated chat sessions)
 CREATE TABLE IF NOT EXISTS public.conversations (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   title TEXT NOT NULL DEFAULT 'New Conversation',
   department TEXT DEFAULT 'General',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. Messages Table
+-- 7. Messages Table (Chat turn history)
 CREATE TABLE IF NOT EXISTS public.messages (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  conversation_id UUID REFERENCES public.conversations(id) ON DELETE CASCADE,
-  sender TEXT NOT NULL CHECK (sender IN ('user', 'assistant')),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id UUID NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
+  sender TEXT NOT NULL CHECK (sender IN ('user', 'assistant', 'system')),
   content TEXT NOT NULL,
   citations JSONB DEFAULT '[]'::jsonb,
   is_unknown BOOLEAN DEFAULT FALSE,
-  feedback TEXT CHECK (feedback IN ('positive', 'negative', NULL)),
+  feedback TEXT CHECK (feedback IN ('positive', 'negative', 'helpful', 'not_helpful')),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. RPC Function for Cosine Similarity Vector Search
+-- 8. Message Sources Table
+CREATE TABLE IF NOT EXISTS public.message_sources (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id UUID NOT NULL REFERENCES public.messages(id) ON DELETE CASCADE,
+  document_id UUID REFERENCES public.documents(id) ON DELETE CASCADE,
+  chunk_id UUID REFERENCES public.document_chunks(id) ON DELETE CASCADE,
+  source_title TEXT,
+  source_excerpt TEXT,
+  relevance_score FLOAT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 9. Answer Feedback Table
+CREATE TABLE IF NOT EXISTS public.answer_feedback (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  message_id UUID NOT NULL REFERENCES public.messages(id) ON DELETE CASCADE,
+  feedback_type TEXT NOT NULL CHECK (feedback_type IN ('helpful', 'not_helpful', 'positive', 'negative')),
+  comment TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ====================================================================
+-- Indexes & Performance Optimizations
+-- ====================================================================
+CREATE INDEX IF NOT EXISTS idx_documents_category ON public.documents(category);
+CREATE INDEX IF NOT EXISTS idx_documents_department ON public.documents(department);
+CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON public.document_chunks(document_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON public.conversations(user_id);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON public.messages(conversation_id);
+
+-- ====================================================================
+-- Vector Search RPC Function (Cosine Similarity match_chunks)
+-- ====================================================================
 CREATE OR REPLACE FUNCTION match_chunks (
   query_embedding vector(768),
-  match_threshold float,
-  match_count int,
+  match_threshold float DEFAULT 0.25,
+  match_count int DEFAULT 5,
   filter_category text DEFAULT NULL,
   filter_department text DEFAULT NULL
 )
@@ -99,85 +138,13 @@ BEGIN
     dc.chunk_index,
     dc.content,
     dc.metadata,
-    (1 - (dc.embedding <=> query_embedding))::float AS similarity
+    1 - (dc.embedding <=> query_embedding) AS similarity
   FROM public.document_chunks dc
-  JOIN public.documents d ON d.id = dc.document_id
+  JOIN public.documents d ON dc.document_id = d.id
   WHERE (1 - (dc.embedding <=> query_embedding)) > match_threshold
     AND (filter_category IS NULL OR filter_category = 'All' OR d.category = filter_category)
-    AND (filter_department IS NULL OR filter_department = 'General' OR d.department = filter_department OR d.department = 'General')
+    AND (filter_department IS NULL OR filter_department = 'General' OR d.department = filter_department)
   ORDER BY dc.embedding <=> query_embedding
   LIMIT match_count;
 END;
 $$;
-
--- Enable Row Level Security (RLS) on all tables
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.document_chunks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
-
--- RLS POLICIES FOR PROFILES
-CREATE POLICY "Public profiles are readable by authenticated users" ON public.profiles
-  FOR SELECT USING (auth.role() = 'authenticated' OR true);
-
-CREATE POLICY "Allow profile insertion" ON public.profiles
-  FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Users can update their own profile" ON public.profiles
-  FOR UPDATE USING (auth.uid() = id);
-
--- RLS POLICIES FOR DOCUMENTS & CHUNKS
-CREATE POLICY "Documents readable by all authenticated users" ON public.documents
-  FOR SELECT USING (true);
-
-CREATE POLICY "Allow document insert" ON public.documents
-  FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Allow document delete" ON public.documents
-  FOR DELETE USING (true);
-
-CREATE POLICY "Chunks readable by all authenticated users" ON public.document_chunks
-  FOR SELECT USING (true);
-
-CREATE POLICY "Allow chunk insert" ON public.document_chunks
-  FOR INSERT WITH CHECK (true);
-
-CREATE POLICY "Allow chunk delete" ON public.document_chunks
-  FOR DELETE USING (true);
-
--- RLS POLICIES FOR CONVERSATIONS & MESSAGES
-CREATE POLICY "Users can manage their own conversations" ON public.conversations
-  FOR ALL USING (auth.uid() = user_id OR user_id IS NULL OR auth.role() = 'service_role');
-
-CREATE POLICY "Users can access messages of their conversations" ON public.messages
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM public.conversations 
-      WHERE id = messages.conversation_id 
-      AND (user_id = auth.uid() OR user_id IS NULL)
-    )
-    OR auth.role() = 'service_role'
-  );
-
--- Automatically create profile on signup via Postgres Trigger
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO public.profiles (id, email, full_name, role)
-  VALUES (
-    new.id,
-    new.email,
-    COALESCE(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
-    COALESCE(new.raw_user_meta_data->>'role', 'student')
-  )
-  ON CONFLICT (id) DO NOTHING;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Trigger definition
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
