@@ -5,6 +5,7 @@ import { supabase as sbClient } from '../supabaseClient';
 
 export default function AuthPage({ currentUser, setCurrentUser }) {
   const [isLogin, setIsLogin] = useState(true);
+  const [selectedRole, setSelectedRole] = useState('student');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -13,6 +14,24 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
   const [authError, setAuthError] = useState(null);
   const [authSuccess, setAuthSuccess] = useState(null);
   const navigate = useNavigate();
+
+  const handleRoleSwitch = (role) => {
+    setSelectedRole(role);
+    setAuthError(null);
+    setAuthSuccess(null);
+    if (role === 'admin') {
+      if (!email || email === 'student@eduquery.edu') {
+        setEmail('admin@eduquery.edu');
+        setPassword('admin123');
+      }
+    } else {
+      if (email === 'admin@eduquery.edu' || email === 'demo@eduquery.ai') {
+        setEmail('');
+        setPassword('');
+      }
+    }
+  };
+
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
@@ -295,7 +314,7 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
           <div style={{
             display: 'flex',
             borderBottom: '2px solid #f1f5f9',
-            marginBottom: '24px'
+            marginBottom: '20px'
           }}>
             <button
               type="button"
@@ -335,6 +354,60 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
             </button>
           </div>
 
+          {/* Visibly Rendered Student / Admin Role Selector Toggle */}
+          {isLogin && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              marginBottom: '20px',
+              background: '#f1f5f9',
+              padding: '4px',
+              borderRadius: '10px'
+            }}>
+              <button
+                type="button"
+                onClick={() => handleRoleSwitch('student')}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: '7px',
+                  border: 'none',
+                  background: selectedRole === 'student' ? '#ffffff' : 'transparent',
+                  color: selectedRole === 'student' ? '#0f172a' : '#64748b',
+                  fontWeight: selectedRole === 'student' ? 700 : 500,
+                  boxShadow: selectedRole === 'student' ? '0 1px 3px rgba(15, 23, 42, 0.1)' : 'none',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                Student Access
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleRoleSwitch('admin')}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: '7px',
+                  border: 'none',
+                  background: selectedRole === 'admin' ? '#0b3bbd' : 'transparent',
+                  color: selectedRole === 'admin' ? '#ffffff' : '#64748b',
+                  fontWeight: selectedRole === 'admin' ? 700 : 500,
+                  boxShadow: selectedRole === 'admin' ? '0 2px 6px rgba(11, 59, 189, 0.3)' : 'none',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                Admin Access
+              </button>
+            </div>
+          )}
+
           {/* Alert Messages */}
           {authError && (
             <div style={{
@@ -373,6 +446,7 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
               <div>{authSuccess}</div>
             </div>
           )}
+
 
           {/* Form Inputs */}
           <form onSubmit={handleAuthSubmit}>
