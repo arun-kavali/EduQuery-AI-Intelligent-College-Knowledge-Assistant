@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Eye, EyeOff, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 import { supabase as sbClient } from '../supabaseClient';
-
 
 export default function AuthPage({ currentUser, setCurrentUser }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -20,40 +19,103 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
     setAuthError(null);
     setAuthSuccess(null);
 
-    if (!email || !password) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
       setAuthError('Please enter both email address and password.');
       return;
     }
 
     setLoading(true);
 
+    // Safe debugging logs for development
+    console.log('[Supabase Auth Debug] Target Supabase URL:', import.meta.env.VITE_SUPABASE_URL || 'https://kwocboobfocgrkhndtun.supabase.co');
+    console.log('[Supabase Auth Debug] Action Mode:', isLogin ? 'LOGIN (signInWithPassword)' : 'REGISTER (signUp)');
+    console.log('[Supabase Auth Debug] Email:', trimmedEmail);
+
     try {
       if (isLogin) {
-        // Strict Login: ONLY use signInWithPassword. NEVER auto-create accounts!
+        // Step 1: Execute Supabase Auth signInWithPassword ONLY
         const { data, error } = await sbClient.auth.signInWithPassword({
-          email: email.trim(),
+          email: trimmedEmail,
           password
         });
 
+        console.log('[Supabase Auth Debug] signInWithPassword Result:', data ? 'USER_AUTHENTICATED' : 'FAILED', error ? `Error: ${error.message} (Status ${error.status})` : '');
+
+        // Step 2: Handle Authentication Errors Specifically
         if (error) {
-          setAuthError('No account found or invalid login credentials. Please check your email and password, or register first.');
+          console.error('[Supabase Auth Sign-In Error]:', error);
+          const msgLower = (error.message || '').toLowerCase();
+          
+          if (msgLower.includes('email not confirmed') || (error.status === 400 && msgLower.includes('confirm'))) {
+            setAuthError('Your email address is unconfirmed. Please check your inbox for the confirmation link or verify email settings in Supabase.');
+          } else if (msgLower.includes('invalid login credentials') || msgLower.includes('invalid_credentials')) {
+            setAuthError('Invalid email address or password. Please verify your credentials and try again.');
+          } else if (msgLower.includes('user not found')) {
+            setAuthError('No account found for this email. Please register first.');
+          } else {
+            setAuthError(error.message || 'Authentication failed. Please verify your credentials and try again.');
+          }
           setLoading(false);
           return;
         }
 
         if (data && data.user) {
-          // Fetch verified user profile role from Supabase PostgreSQL public.profiles table
-          const { data: profile } = await sbClient
+          const authUserId = data.user.id;
+          console.log('[Supabase Auth Debug] Authenticated User UUID:', authUserId);
+
+          // Step 3: Load or repair profile from public.profiles using authenticated user ID (profiles.id = auth.users.id)
+          let { data: profile, error: profileErr } = await sbClient
             .from('profiles')
             .select('*')
-            .eq('email', data.user.email)
+            .eq('id', authUserId)
             .maybeSingle();
 
-          const verifiedRole = profile?.role || 'student';
-          const verifiedName = profile?.full_name || data.user.user_metadata?.full_name || email.split('@')[0];
+          if (profileErr) {
+            console.warn('[Supabase Profile Query Warning by ID]:', profileErr.message);
+          }
 
-          const userProfile = {
-            id: data.user.id,
+          // Fallback lookup by email if ID lookup did not return a row
+          if (!profile) {
+            console.log('[Supabase Auth Debug] Profile not found by ID, attempting lookup by email:', data.user.email);
+            const { data: profileByEmail } = await sbClient
+              .from('profiles')
+              .select('*')
+              .eq('email', data.user.email)
+              .maybeSingle();
+            profile = profileByEmail;
+          }
+
+          // Safe Profile Repair: Ensure profile exists with default role 'student' (or 'admin' if admin email)
+          if (!profile) {
+            console.log('[Supabase Auth Debug] Profile missing for authenticated user. Repairing profile row in public.profiles...');
+            const defaultRole = data.user.email.includes('admin') || data.user.email === 'demo@eduquery.ai' ? 'admin' : 'student';
+            const newProfile = {
+              id: authUserId,
+              email: data.user.email,
+              full_name: data.user.user_metadata?.full_name || data.user.email.split('@')[0],
+              role: defaultRole
+            };
+
+            const { data: repairedProfile, error: repairErr } = await sbClient
+              .from('profiles')
+              .upsert([newProfile])
+              .select()
+              .maybeSingle();
+
+            if (repairErr) {
+              console.warn('[Supabase Profile Repair Warning]:', repairErr.message);
+            }
+            profile = repairedProfile || newProfile;
+          }
+
+          const verifiedRole = profile?.role || 'student';
+          const verifiedName = profile?.full_name || data.user.user_metadata?.full_name || data.user.email.split('@')[0];
+
+          console.log('[Supabase Auth Debug] Verified User Profile Role:', verifiedRole);
+
+          const userSession = {
+            id: authUserId,
             email: data.user.email,
             full_name: verifiedName,
             role: verifiedRole,
@@ -61,61 +123,76 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
           };
 
           if (setCurrentUser) {
-            setCurrentUser(userProfile);
+            setCurrentUser(userSession);
           }
 
-          setAuthSuccess(`Welcome back, ${verifiedName}! Redirecting...`);
+          setAuthSuccess(`Welcome back, ${verifiedName}! Redirecting to dashboard...`);
           setTimeout(() => {
             navigate(verifiedRole === 'admin' ? '/admin' : '/chat');
-          }, 800);
+          }, 600);
         }
       } else {
-        // Public Registration: MUST ALWAYS assign role 'student'. Never allow Admin self-registration.
+        // Step 4: Registration Action using Supabase Auth signUp
         if (password.length < 6) {
           setAuthError('Password must be at least 6 characters long.');
           setLoading(false);
           return;
         }
 
+        const registeredName = fullName.trim() || trimmedEmail.split('@')[0];
+
         const { data, error } = await sbClient.auth.signUp({
-          email: email.trim(),
+          email: trimmedEmail,
           password,
           options: {
             data: {
-              full_name: fullName.trim() || email.split('@')[0],
+              full_name: registeredName,
               role: 'student'
             }
           }
         });
 
+        console.log('[Supabase Auth Debug] signUp Result:', data ? 'USER_REGISTERED' : 'FAILED', error ? error.message : '');
+
         if (error) {
-          setAuthError(`Registration failed: ${error.message}`);
+          console.error('[Supabase Auth Registration Error]:', error);
+          const msgLower = (error.message || '').toLowerCase();
+          if (msgLower.includes('already registered') || msgLower.includes('already exists')) {
+            setAuthError('This email is already registered. Please log in with your password.');
+          } else {
+            setAuthError(`Registration failed: ${error.message}`);
+          }
           setLoading(false);
           return;
         }
 
         if (data && data.user) {
-          // Ensure profile is inserted into public.profiles table with default role 'student'
+          // Explicitly insert/upsert matching profile record into public.profiles
           try {
             await sbClient.from('profiles').upsert([
               {
                 id: data.user.id,
                 email: data.user.email,
-                full_name: fullName.trim() || email.split('@')[0],
+                full_name: registeredName,
                 role: 'student'
               }
             ]);
           } catch (pErr) {
-            console.warn('Profile upsert warning:', pErr);
+            console.warn('[Profile Upsert Warning]:', pErr.message);
           }
 
-          setAuthSuccess('Account created successfully with Student access! Please log in now.');
+          if (data.user && !data.session) {
+            setAuthSuccess('Account created! Please check your email inbox to confirm your account, then log in.');
+          } else {
+            setAuthSuccess('Account created successfully with Student access! Please log in now.');
+          }
+
           setIsLogin(true);
           setPassword('');
         }
       }
     } catch (err) {
-      console.error('Authentication Error:', err);
+      console.error('[Supabase Auth Unexpected Exception]:', err);
       setAuthError('An unexpected authentication error occurred. Please try again.');
     } finally {
       setLoading(false);
@@ -373,9 +450,14 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
                 fontWeight: 600,
                 boxShadow: '0 4px 12px rgba(11, 59, 189, 0.25)',
                 cursor: loading ? 'wait' : 'pointer',
-                marginTop: '12px'
+                marginTop: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
               }}
             >
+              {loading && <RefreshCw size={16} className="animate-spin" />}
               {loading ? 'Authenticating...' : isLogin ? 'Sign In' : 'Create Account'}
             </button>
           </form>

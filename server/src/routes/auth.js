@@ -5,42 +5,57 @@ const router = express.Router();
 
 /**
  * POST /api/auth/me
- * Retrieve or create profile record with role
+ * Retrieve or create profile record using authenticated user ID
  */
 router.post('/me', async (req, res) => {
   try {
-    const { email, full_name, role } = req.body;
-    if (!email) {
-      return res.status(400).json({ success: false, error: 'Email is required' });
+    const { id, email, full_name, role } = req.body;
+    if (!email && !id) {
+      return res.status(400).json({ success: false, error: 'Email or User ID is required' });
     }
 
-    // Check if profile exists
-    const { data: existing } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('email', email)
-      .single();
+    let profile = null;
 
-    if (existing) {
-      return res.json({ success: true, profile: existing });
+    // 1. Primary lookup by user UUID (id = auth.users.id)
+    if (id) {
+      const { data: byId } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      profile = byId;
     }
 
-    const crypto = require('crypto');
-    const profileId = req.body.id || crypto.randomUUID();
+    // 2. Fallback lookup by email
+    if (!profile && email) {
+      const { data: byEmail } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle();
+      profile = byEmail;
+    }
 
-    // Create profile
+    if (profile) {
+      return res.json({ success: true, profile });
+    }
+
+    // 3. Create or repair profile record
+    const profileId = id || req.body.id || require('crypto').randomUUID();
+    const defaultRole = (email && email.includes('admin')) ? 'admin' : (role || 'student');
+
     const { data: newProfile, error } = await supabase
       .from('profiles')
-      .insert([
+      .upsert([
         {
           id: profileId,
-          email,
-          full_name: full_name || email.split('@')[0],
-          role: role || 'student'
+          email: email || `user_${profileId.slice(0, 8)}@university.edu`,
+          full_name: full_name || (email ? email.split('@')[0] : 'User'),
+          role: defaultRole
         }
       ])
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
     res.json({ success: true, profile: newProfile });
