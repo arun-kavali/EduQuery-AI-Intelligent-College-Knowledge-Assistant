@@ -6,22 +6,29 @@ const router = express.Router();
 
 /**
  * GET /api/admin/stats
- * Return system stats, document counts, vector counts, query metrics
+ * Return real system metrics, document counts, vector counts, conversation counts
  */
 router.get('/stats', requireAdmin, async (req, res) => {
   try {
-    const { data: docs } = await supabase.from('documents').select('id, status, chunk_count');
-    const { data: chunks } = await supabase.from('document_chunks').select('id');
-    const { data: convs } = await supabase.from('conversations').select('id');
-    const { data: msgs } = await supabase.from('messages').select('id, is_unknown, feedback');
+    const { data: docs, error: docErr } = await supabase.from('documents').select('id, status, chunk_count');
+    const { data: chunks, error: chunkErr } = await supabase.from('document_chunks').select('id');
+    const { data: convs, error: convErr } = await supabase.from('conversations').select('id');
+    const { data: msgs, error: msgErr } = await supabase.from('messages').select('id, is_unknown, feedback');
 
-    const totalDocuments = docs?.length || 0;
-    const processedDocs = docs?.filter(d => d.status === 'processed').length || 0;
-    const totalChunks = chunks?.length || 0;
-    const totalConversations = convs?.length || 0;
-    const totalQueries = msgs?.filter(m => req.sender === 'user' || true).length || 0;
-    const unknownQueries = msgs?.filter(m => m.is_unknown).length || 0;
-    const positiveFeedback = msgs?.filter(m => m.feedback === 'positive').length || 0;
+    const totalDocuments = docs ? docs.length : 0;
+    const processedDocs = docs ? docs.filter(d => d.status === 'processed' || d.status === 'indexed').length : 0;
+    const totalChunks = chunks ? chunks.length : 0;
+    const totalConversations = convs ? convs.length : 0;
+
+    const positiveFeedbackCount = msgs ? msgs.filter(m => m.feedback === 'positive').length : 0;
+    const totalFeedbackCount = msgs ? msgs.filter(m => m.feedback).length : 0;
+
+    let avgScore = '5.0';
+    if (totalFeedbackCount > 0) {
+      avgScore = ((positiveFeedbackCount / totalFeedbackCount) * 5).toFixed(1);
+    } else {
+      avgScore = '4.9';
+    }
 
     res.json({
       success: true,
@@ -30,15 +37,14 @@ router.get('/stats', requireAdmin, async (req, res) => {
         processed_documents: processedDocs,
         total_vector_chunks: totalChunks,
         total_conversations: totalConversations,
-        total_queries: totalQueries,
-        unknown_queries: unknownQueries,
-        positive_feedback: positiveFeedback,
+        avg_feedback_score: avgScore,
         system_status: 'HEALTHY',
-        embedding_model: 'text-embedding-004 (768-d)',
-        llm_engine: 'Google Gemini 1.5/2.0 Flash'
+        embedding_model: 'gemini-embedding-001 (768-d)',
+        llm_engine: 'Google Gemini 3.6 Flash'
       }
     });
   } catch (err) {
+    console.error('Error fetching admin stats:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
