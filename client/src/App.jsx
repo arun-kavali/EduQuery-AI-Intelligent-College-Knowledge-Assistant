@@ -14,7 +14,7 @@ function AppLayout({ currentUser, setCurrentUser, handleLogout }) {
   const isDashboardRoute = ['/chat', '/documents', '/admin'].some(path => location.pathname.startsWith(path));
   const isAuthRoute = location.pathname === '/auth';
 
-  // Strict Protection: Require authenticated user for all dashboard routes
+  // Strict Protection: Unauthenticated users visiting dashboard routes are redirected immediately to /auth
   if (isDashboardRoute && !currentUser) {
     return <Navigate to="/auth" replace />;
   }
@@ -64,19 +64,8 @@ function AppLayout({ currentUser, setCurrentUser, handleLogout }) {
 }
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem('eduquery_user');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.email && parsed.id) return parsed;
-      }
-    } catch (e) {
-      console.error('Error parsing stored user session:', e);
-    }
-    return null;
-  });
-
+  // Rely strictly on Supabase getSession verification on startup instead of stale localStorage user data
+  const [currentUser, setCurrentUser] = useState(null);
   const [initializing, setInitializing] = useState(true);
 
   const fetchProfileAndSetUser = async (sessionUser, accessToken) => {
@@ -86,11 +75,15 @@ export default function App() {
     }
 
     try {
-      let { data: profile } = await supabase
+      let { data: profile, error: pErr } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', sessionUser.id)
         .maybeSingle();
+
+      if (pErr) {
+        console.warn('[Supabase Profile Lookup Error]:', pErr.message);
+      }
 
       if (!profile) {
         const { data: pByEmail } = await supabase
@@ -114,23 +107,31 @@ export default function App() {
 
       handleSetUser(userObj);
     } catch (err) {
-      console.error('Error fetching profile in auth change:', err);
+      console.error('[Profile Fetch Error]:', err);
     }
   };
 
   useEffect(() => {
-    // Initial Supabase Session Sync
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // 1. Verify Real Supabase Session on Startup
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error('[Supabase getSession Error]:', error.message);
+      }
       if (session?.user) {
         fetchProfileAndSetUser(session.user, session.access_token);
       } else {
         handleSetUser(null);
       }
       setInitializing(false);
+    }).catch((err) => {
+      console.error('[Supabase getSession Exception]:', err);
+      handleSetUser(null);
+      setInitializing(false);
     });
 
-    // Reactive Auth State Subscription
+    // 2. Reactive Auth State Subscription
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[Supabase Auth Event]:', event);
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         if (session?.user) {
           fetchProfileAndSetUser(session.user, session.access_token);
@@ -141,7 +142,7 @@ export default function App() {
     });
 
     return () => {
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, []);
 
@@ -150,7 +151,7 @@ export default function App() {
     if (user) {
       localStorage.setItem('eduquery_user', JSON.stringify(user));
     } else {
-      // Complete Purge of Session, LocalStorage, SessionStorage & Caches on Logout
+      // Complete Purge of Session Data, LocalStorage, SessionStorage & Conversation Caches
       localStorage.removeItem('eduquery_user');
       Object.keys(localStorage).forEach((key) => {
         if (key.startsWith('eduquery_') || key.startsWith('sb-')) {
@@ -163,9 +164,14 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('[Supabase signOut Error]:', error.message);
+      } else {
+        console.log('[Supabase Logout]: Successfully signed out session.');
+      }
     } catch (err) {
-      console.error('Logout Exception:', err);
+      console.error('[Supabase Logout Exception]:', err);
     } finally {
       handleSetUser(null);
     }
