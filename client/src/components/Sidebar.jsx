@@ -5,7 +5,7 @@ import apiClient from '../api/apiClient';
 
 const LOGO_URL = 'https://res.cloudinary.com/dvakxuk58/image/upload/v1788005318/IMG_20260829_173724_xw36nc.png';
 
-export default function Sidebar({ currentUser, setCurrentUser }) {
+export default function Sidebar({ currentUser, setCurrentUser, handleLogout }) {
   const location = useLocation();
   const navigate = useNavigate();
   const params = useParams();
@@ -37,7 +37,6 @@ export default function Sidebar({ currentUser, setCurrentUser }) {
     }
   };
 
-
   const isActive = (path) => {
     if (path === '/chat') {
       return location.pathname === '/chat' || location.pathname.startsWith('/chat/');
@@ -45,12 +44,16 @@ export default function Sidebar({ currentUser, setCurrentUser }) {
     return location.pathname === path;
   };
 
-  const handleLogout = () => {
-    if (setCurrentUser) {
+  const onLogoutClick = async (e) => {
+    if (e) e.stopPropagation();
+    if (handleLogout) {
+      await handleLogout();
+    } else if (setCurrentUser) {
       setCurrentUser(null);
     }
-    navigate('/auth');
+    navigate('/auth', { replace: true });
   };
+
 
   return (
     <aside className="sidebar">
@@ -165,12 +168,13 @@ export default function Sidebar({ currentUser, setCurrentUser }) {
             </div>
           </div>
           <button 
-            onClick={(e) => { e.stopPropagation(); handleLogout(); }}
+            onClick={onLogoutClick}
             title="Logout"
             style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}
           >
             <LogOut size={16} />
           </button>
+
         </div>
       </div>
     </aside>
