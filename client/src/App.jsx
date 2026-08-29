@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import LandingPage from './pages/LandingPage';
@@ -21,8 +21,17 @@ function AppLayout({ currentUser, setCurrentUser }) {
           <Routes>
             <Route path="/chat" element={<ChatPage currentUser={currentUser} />} />
             <Route path="/chat/:conversationId" element={<ChatPage currentUser={currentUser} />} />
-            <Route path="/documents" element={<DocumentsPage />} />
-            <Route path="/admin" element={<AdminPage currentUser={currentUser} />} />
+            <Route path="/documents" element={<DocumentsPage currentUser={currentUser} />} />
+            <Route
+              path="/admin"
+              element={
+                currentUser?.role === 'admin' ? (
+                  <AdminPage currentUser={currentUser} />
+                ) : (
+                  <Navigate to="/chat" replace />
+                )
+              }
+            />
           </Routes>
         </main>
       </div>
@@ -46,15 +55,33 @@ function AppLayout({ currentUser, setCurrentUser }) {
 }
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState({
-    email: 'student@eduquery.edu',
-    full_name: 'Demo Student',
-    role: 'student'
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('eduquery_user');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      // Fallback
+    }
+    return {
+      email: 'student@eduquery.edu',
+      full_name: 'Demo Student',
+      role: 'student'
+    };
   });
+
+  const handleSetUser = (user) => {
+    setCurrentUser(user);
+    if (user) {
+      localStorage.setItem('eduquery_user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('eduquery_user');
+    }
+  };
 
   return (
     <Router>
-      <AppLayout currentUser={currentUser} setCurrentUser={setCurrentUser} />
+      <AppLayout currentUser={currentUser} setCurrentUser={handleSetUser} />
     </Router>
   );
 }
+

@@ -108,26 +108,16 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
           
           {/* Logo Header */}
           <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-            <div style={{
-              width: '44px',
-              height: '44px',
-              background: '#0b3bbd',
-              color: '#ffffff',
-              borderRadius: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 800,
-              fontSize: '1.1rem',
-              margin: '0 auto 12px',
-              boxShadow: '0 4px 12px rgba(11, 59, 189, 0.25)'
-            }}>
-              EQ
-            </div>
+            <img
+              src="https://res.cloudinary.com/dvakxuk58/image/upload/v1788005318/IMG_20260829_173724_xw36nc.png"
+              alt="EduQuery AI Logo"
+              style={{ width: '44px', height: '44px', objectFit: 'contain', borderRadius: '10px', margin: '0 auto 12px', boxShadow: '0 4px 12px rgba(11, 59, 189, 0.25)' }}
+            />
             <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a' }}>
               EduQuery AI
             </h2>
           </div>
+
 
           {/* Segmented Log In / Register Tabs */}
           <div style={{

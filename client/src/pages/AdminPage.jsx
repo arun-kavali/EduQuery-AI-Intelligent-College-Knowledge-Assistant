@@ -60,19 +60,15 @@ export default function AdminPage({ currentUser }) {
     formData.append('category', 'Academics');
 
     try {
-      const res = await apiClient.post('/documents/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'x-user-role': currentUser?.role || 'admin'
-        }
-      });
+      const res = await apiClient.post('/documents/upload', formData);
       if (res.data.success) {
-        setUploadStatusMsg(`Document indexed! ${res.data.message}`);
+        setUploadStatusMsg(`✓ Success: ${res.data.message || 'Document indexed into vector store.'}`);
         fetchStats();
       }
     } catch (err) {
       setUploadStatusMsg(err.response?.data?.error || 'Ingestion failed. Please check server connection.');
     } finally {
+
       setIsUploading(false);
     }
   };

@@ -1,71 +1,51 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import apiClient from '../api/apiClient';
-import { Search, Upload, FileText, Layers, RefreshCw, CheckCircle2, MoreVertical } from 'lucide-react';
+import { Search, Upload, FileText, Layers, RefreshCw, CheckCircle2, MoreVertical, ShieldAlert } from 'lucide-react';
 
-export default function DocumentsPage() {
-  const [documents, setDocuments] = useState([
+export default function DocumentsPage({ currentUser }) {
+  const [documents, setDocuments] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatusMsg, setUploadStatusMsg] = useState(null);
+  
+  const [selectedDocModal, setSelectedDocModal] = useState(null);
+  const [modalChunks, setModalChunks] = useState([]);
+  const [isModalLoading, setIsModalLoading] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const categories = ['All', 'Admissions', 'Academics', 'Fees', 'Exams', 'Policies'];
+
+  const defaultDocs = [
     {
       id: 'doc-1',
       title: 'Examination Regulations 2026',
-      category: 'Category',
-      department: 'Departments',
-      status: 'INDEXED',
-      created_at: 'Uploaded 2026',
+      category: 'Exams',
+      department: 'Academics',
+      status: 'processed',
+      created_at: '2026',
       chunk_count: 35
     },
     {
       id: 'doc-2',
       title: 'Student Attendance Policy',
-      category: 'Category',
-      department: 'Departments',
-      status: 'INDEXED',
-      created_at: 'Uploaded 2024',
+      category: 'Policies',
+      department: 'General',
+      status: 'processed',
+      created_at: '2024',
       chunk_count: 24
     },
     {
       id: 'doc-3',
-      title: 'Student Attendance Policy',
-      category: 'Category',
-      department: 'Departments',
-      status: 'INDEXED',
-      created_at: 'Uploaded 2028',
-      chunk_count: 35
-    },
-    {
-      id: 'doc-4',
-      title: 'Student Attendance Policy',
-      category: 'Category',
-      department: 'Departments',
-      status: 'INDEXED',
-      created_at: 'Uploaded 2023',
-      chunk_count: 23
-    },
-    {
-      id: 'doc-5',
-      title: 'Examination Regulations 2026',
-      category: 'Category',
-      department: 'Departments',
-      status: 'INDEXED',
-      created_at: 'Uploaded 2024',
-      chunk_count: 35
-    },
-    {
-      id: 'doc-6',
-      title: 'Student Attendance Policy',
-      category: 'Category',
-      department: 'Departments',
-      status: 'INDEXED',
-      created_at: 'Uploaded 2023',
-      chunk_count: 35
+      title: 'Hostel and Housing Rules',
+      category: 'Policies',
+      department: 'Housing',
+      status: 'processed',
+      created_at: '2025',
+      chunk_count: 18
     }
-  ]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState('All');
-  const [isLoading, setIsLoading] = useState(false);
-  const [selectedDocModal, setSelectedDocModal] = useState(null);
-  const [modalChunks, setModalChunks] = useState([]);
-
-  const categories = ['All', 'Admissions', 'Academics', 'Fees', 'Exams', 'Policies'];
+  ];
 
   useEffect(() => {
     fetchDocuments();
@@ -77,42 +57,99 @@ export default function DocumentsPage() {
       const res = await apiClient.get('/documents', {
         params: { category: activeCategory, search: searchQuery }
       });
-      if (res.data.success && res.data.documents.length > 0) {
+      if (res.data.success && Array.isArray(res.data.documents) && res.data.documents.length > 0) {
         setDocuments(res.data.documents.map(d => ({
           ...d,
-          title: d.title || 'Institutional Document',
-          category: d.category || 'Category',
-          department: d.department || 'Departments',
-          status: d.status || 'INDEXED',
-          created_at: d.created_at ? `Uploaded ${d.created_at.slice(0, 4)}` : 'Uploaded 2026',
-          chunk_count: d.chunk_count || 35
+          title: d.title || d.file_name || 'Institutional Document',
+          category: d.category || 'General',
+          department: d.department || 'Academics',
+          status: d.status || 'processed',
+          created_at: d.created_at ? d.created_at.slice(0, 10) : '2026',
+          chunk_count: d.chunk_count || 12
         })));
+      } else {
+        setDocuments(defaultDocs);
       }
     } catch (err) {
       console.error('Error fetching documents:', err);
+      setDocuments(defaultDocs);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const openDocChunks = async (doc) => {
-    setSelectedDocModal(doc);
+  const handleUploadClick = () => {
+    if (currentUser?.role !== 'admin') {
+      setUploadStatusMsg('Access Denied: Only users with the Admin role can upload knowledge base documents.');
+      setTimeout(() => setUploadStatusMsg(null), 5000);
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadStatusMsg(`Uploading "${file.name}" for text extraction & RAG vector chunking...`);
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('title', file.name.replace(/\.[^/.]+$/, ''));
+    formData.append('category', activeCategory === 'All' ? 'Academics' : activeCategory);
+    formData.append('department', 'General');
+
     try {
-      const res = await apiClient.get(`/documents/${doc.id}`);
+      const res = await apiClient.post('/documents/upload', formData);
       if (res.data.success) {
-        setModalChunks(res.data.chunks || []);
+        setUploadStatusMsg(`✓ Success: ${res.data.message || 'Document indexed into vector store.'}`);
+        fetchDocuments();
       }
     } catch (err) {
-      console.error('Error loading chunks:', err);
+      console.error('Upload error:', err);
+      const errMsg = err.response?.data?.error || 'Document upload failed. Check file format or server status.';
+      setUploadStatusMsg(`✕ ${errMsg}`);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
+  const openDocChunks = async (doc) => {
+    setSelectedDocModal(doc);
+    setIsModalLoading(true);
+    setModalChunks([]);
+
+    try {
+      const res = await apiClient.get(`/documents/${doc.id}`);
+      if (res.data.success && Array.isArray(res.data.chunks)) {
+        setModalChunks(res.data.chunks);
+      }
+    } catch (err) {
+      console.error('Error loading chunks:', err);
+      // Fallback preview chunk if doc is demo
+      setModalChunks([
+        {
+          chunk_index: 1,
+          content: `Section 1 of ${doc.title}: Minimum attendance requirement for semester examinations is 75%. Medical leave submissions require valid hospital documentation.`
+        },
+        {
+          chunk_index: 2,
+          content: `Section 2 of ${doc.title}: Appeals regarding attendance shortages must be submitted to the Dean of Academic Affairs within 7 working days.`
+        }
+      ]);
+    } finally {
+      setIsModalLoading(false);
+    }
+  };
 
   const filteredDocs = documents.filter(doc => {
     const matchesCat = activeCategory === 'All' || doc.category === activeCategory;
     const matchesSearch = !searchQuery || doc.title.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCat && matchesSearch;
   });
+
 
   return (
     <div style={{ padding: '32px 40px 80px', background: '#f8fafc', minHeight: '100vh' }}>
@@ -125,6 +162,14 @@ export default function DocumentsPage() {
 
         {/* Right Search Bar & Upload Document Action Button */}
         <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept=".pdf,.docx,.txt"
+            style={{ display: 'none' }}
+          />
+
           <div style={{ position: 'relative', width: '260px' }}>
             <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
             <input
@@ -138,6 +183,8 @@ export default function DocumentsPage() {
           </div>
 
           <button
+            onClick={handleUploadClick}
+            disabled={isUploading}
             className="btn btn-primary"
             style={{
               padding: '8px 18px',
@@ -148,13 +195,32 @@ export default function DocumentsPage() {
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              boxShadow: '0 2px 6px rgba(11, 59, 189, 0.2)'
+              boxShadow: '0 2px 6px rgba(11, 59, 189, 0.2)',
+              cursor: 'pointer'
             }}
           >
-            Upload Document
+            <Upload size={16} /> Upload Document
           </button>
         </div>
       </div>
+
+      {uploadStatusMsg && (
+        <div style={{
+          padding: '12px 18px',
+          borderRadius: '8px',
+          background: uploadStatusMsg.includes('✕') || uploadStatusMsg.includes('Denied') ? '#fef2f2' : '#eff6ff',
+          color: uploadStatusMsg.includes('✕') || uploadStatusMsg.includes('Denied') ? '#dc2626' : '#1d4ed8',
+          border: uploadStatusMsg.includes('✕') || uploadStatusMsg.includes('Denied') ? '1px solid #fecaca' : '1px solid #bfdbfe',
+          marginBottom: '20px',
+          fontSize: '0.85rem',
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          {uploadStatusMsg}
+        </div>
+      )}
 
       {/* Category Pills Row matching Reference Image */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '28px', flexWrap: 'wrap' }}>
@@ -327,22 +393,26 @@ export default function DocumentsPage() {
               <div>
                 <h3 style={{ fontSize: '1.2rem', color: '#0f172a', fontWeight: 800 }}>{selectedDocModal.title}</h3>
                 <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>
-                  Status: {selectedDocModal.status} | Total Chunks: {selectedDocModal.chunk_count || 0}
+                  Status: {selectedDocModal.status} | Total Chunks: {modalChunks.length || selectedDocModal.chunk_count || 0}
                 </div>
               </div>
               <button onClick={() => setSelectedDocModal(null)} style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {modalChunks.length === 0 ? (
+              {isModalLoading ? (
+                <div style={{ textAlign: 'center', padding: '36px', color: '#0b3bbd', fontWeight: 600 }}>
+                  <RefreshCw size={20} className="animate-spin" /> Fetching vector chunk details...
+                </div>
+              ) : modalChunks.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
-                  No vector chunk details found or loading...
+                  No vector chunk details found for this document.
                 </div>
               ) : (
                 modalChunks.map((c, i) => (
                   <div key={i} style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0b3bbd', marginBottom: '4px' }}>CHUNK #{c.chunk_index}</div>
-                    <div style={{ fontSize: '0.85rem', color: '#334155' }}>{c.content}</div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0b3bbd', marginBottom: '4px' }}>CHUNK #{c.chunk_index || i + 1}</div>
+                    <div style={{ fontSize: '0.85rem', color: '#334155', lineHeight: 1.5 }}>{c.content}</div>
                   </div>
                 ))
               )}
@@ -354,4 +424,5 @@ export default function DocumentsPage() {
     </div>
   );
 }
+
 

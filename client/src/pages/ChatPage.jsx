@@ -1,17 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../api/apiClient';
 import { Paperclip, Send, CheckCircle2, BookOpen, ExternalLink, RefreshCw, Mic, Sparkles, FileText, User } from 'lucide-react';
 
-
 export default function ChatPage({ currentUser }) {
+  const { conversationId } = useParams();
+  const navigate = useNavigate();
   const [conversations, setConversations] = useState([]);
   const [currentConvId, setCurrentConvId] = useState(null);
-  const [messages, setMessages] = useState([
-    // Initial reference conversation matching center reference Image
+  const [messages, setMessages] = useState([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [activeSources, setActiveSources] = useState([]);
+  const [activeCitationModal, setActiveCitationModal] = useState(null);
+  const messagesEndRef = useRef(null);
+
+  const defaultMessages = [
     {
       id: 'demo-1',
       sender: 'user',
-      user_label: 'Student',
+      user_label: currentUser?.role || 'Student',
       content: 'What is the minimum attendance requirement for semester examinations?'
     },
     {
@@ -19,51 +27,25 @@ export default function ChatPage({ currentUser }) {
       sender: 'assistant',
       confidence: 'High Confidence',
       is_verified: true,
-      content: 'What is the minimum attendance requirement for semester examinations? Articles are to minimum on attendance issued once standard policies content on semester examination requirements, and another requirements and non-attendance shows top the values in the grounded response.',
+      content: 'The minimum attendance requirement for semester examinations is 75% as per official university regulations.',
       citations: [
-        { id: 1, document_title: 'Examination Regulations', category: 'DOCUMENT', similarity_score: 93, snippet: 'This is minimum attendance requirement for semester examinations 7 Absences it on...' },
-        { id: 2, document_title: 'Examax Regulations', category: 'POLICY', similarity_score: 78, snippet: 'Snippet on minimum attendance requirement for semester examination for to...' },
-        { id: 3, document_title: 'Examination Regulations', category: 'DOCUMENT', similarity_score: 89, snippet: 'Snippet have no exemptions attendance requirements to relevant policy and agreement...' }
+        { id: 1, document_title: 'Examination Regulations', category: 'DOCUMENT', similarity_score: 93, snippet: 'Minimum attendance requirement for semester examinations is 75%...' }
       ]
     }
-  ]);
-  const [inputMessage, setInputMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [activeSources, setActiveSources] = useState([
-    {
-      id: 1,
-      document_title: 'Examination Re...',
-      type_label: 'Document',
-      category: 'DOCUMENT',
-      similarity_score: 93,
-      badge_color: 'blue',
-      snippet: 'This is minimum attendance requirement for semester examinations 7 Absences it on...'
-    },
-    {
-      id: 2,
-      document_title: 'Student Atten...',
-      type_label: 'Policy',
-      category: 'POLICY',
-      similarity_score: 78,
-      badge_color: 'green',
-      snippet: 'Snippet on minimum attendance requirement for semester examination for to...'
-    },
-    {
-      id: 3,
-      document_title: 'Student Atten...',
-      type_label: 'Document',
-      category: 'DOCUMENT',
-      similarity_score: 89,
-      badge_color: 'green',
-      snippet: 'Snippet have no exemptions attendance requirements to relevant policy and agreement...'
-    }
-  ]);
-  const [activeCitationModal, setActiveCitationModal] = useState(null);
-  const messagesEndRef = useRef(null);
+  ];
 
   useEffect(() => {
     fetchConversations();
   }, []);
+
+  useEffect(() => {
+    if (conversationId) {
+      loadConversationMessages(conversationId);
+    } else {
+      setCurrentConvId(null);
+      setMessages(defaultMessages);
+    }
+  }, [conversationId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -72,13 +54,58 @@ export default function ChatPage({ currentUser }) {
   const fetchConversations = async () => {
     try {
       const res = await apiClient.get('/chat/conversations');
-      if (res.data.success && res.data.conversations.length > 0) {
+      if (res.data.success && Array.isArray(res.data.conversations)) {
         setConversations(res.data.conversations);
       }
     } catch (err) {
       console.error('Error fetching conversations:', err);
     }
   };
+
+  const loadConversationMessages = async (id) => {
+    setIsLoading(true);
+    setCurrentConvId(id);
+    try {
+      const res = await apiClient.get(`/chat/conversations/${id}`);
+      if (res.data.success && Array.isArray(res.data.messages) && res.data.messages.length > 0) {
+        const formatted = res.data.messages.map((m) => ({
+          id: m.id,
+          sender: m.sender,
+          user_label: m.sender === 'user' ? (currentUser?.role || 'Student') : null,
+          content: m.content,
+          citations: m.citations || [],
+          confidence: m.is_unknown ? 'Low Confidence' : 'High Confidence',
+          is_verified: !m.is_unknown
+        }));
+        setMessages(formatted);
+
+        // Collect all citations from assistant messages
+        const allCitations = [];
+        res.data.messages.forEach((m) => {
+          if (m.sender === 'assistant' && Array.isArray(m.citations)) {
+            allCitations.push(...m.citations);
+          }
+        });
+
+        if (allCitations.length > 0) {
+          setActiveSources(allCitations.map((c, idx) => ({
+            id: c.id || idx + 1,
+            document_title: c.document_title || `Source Doc ${idx + 1}`,
+            type_label: c.category || 'Document',
+            category: c.category || 'DOCUMENT',
+            similarity_score: c.similarity_score || 90,
+            badge_color: (c.similarity_score || 90) > 85 ? 'blue' : 'green',
+            snippet: c.snippet || ''
+          })));
+        }
+      }
+    } catch (err) {
+      console.error('Error loading conversation messages:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();

@@ -18,24 +18,16 @@ export default function Navbar({ currentUser, setCurrentUser }) {
     }}>
       {/* Brand Logo */}
       <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <div style={{
-          width: '34px',
-          height: '34px',
-          background: '#0b3bbd',
-          color: '#ffffff',
-          borderRadius: '8px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontWeight: 800,
-          fontSize: '0.9rem'
-        }}>
-          EQ
-        </div>
+        <img
+          src="https://res.cloudinary.com/dvakxuk58/image/upload/v1788005318/IMG_20260829_173724_xw36nc.png"
+          alt="EduQuery AI Logo"
+          style={{ width: '34px', height: '34px', objectFit: 'contain', borderRadius: '8px' }}
+        />
         <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
           EduQuery AI
         </span>
       </Link>
+
 
       {/* Nav Links */}
       <nav style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
