@@ -22,42 +22,38 @@ async function requireAuth(req, res, next) {
       }
     }
 
-    // Demo/Development session fallback via custom header or default user
-    const demoEmail = req.headers['x-user-email'] || 'student@eduquery.edu';
-    req.user = {
-      id: 'demo-user-id',
-      email: demoEmail
-    };
-    return next();
+    // Reject unauthenticated requests
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication Required: Please log in with valid credentials.'
+    });
   } catch (err) {
     res.status(401).json({ success: false, error: 'Authentication failed: ' + err.message });
   }
 }
 
 /**
- * Require Admin role - ALWAYS validates user identity from database profile or verified admin email
+ * Require Admin role - STRICTLY verifies role from database public.profiles table
  */
 async function requireAdmin(req, res, next) {
   try {
     await requireAuth(req, res, async () => {
       const user = req.user;
-      if (!user || !user.email) {
+      if (!user || !user.id) {
         return res.status(401).json({ success: false, error: 'Unauthorized access.' });
       }
 
-      const headerRole = req.headers['x-user-role'];
-
-      // Query database profile table for verified user role
+      // Query database profile table for verified user role by authenticated user ID
       const { data: profile } = await supabase
         .from('profiles')
         .select('role, email')
-        .eq('email', user.email)
+        .eq('id', user.id)
         .maybeSingle();
 
-      const userRole = profile?.role || (headerRole === 'admin' || user.email.includes('admin') || user.email === 'demo@eduquery.ai' ? 'admin' : 'student');
+      const userRole = profile?.role;
 
       if (userRole !== 'admin') {
-        console.warn(`[RBAC Violation Attempt] User ${user.email} with role '${userRole}' attempted admin action on ${req.method} ${req.originalUrl}`);
+        console.warn(`[RBAC Violation Attempt] User ${user.email} (id: ${user.id}) with role '${userRole}' attempted admin action on ${req.method} ${req.originalUrl}`);
         return res.status(403).json({
           success: false,
           error: 'Access Denied: Admin privileges are required to perform this action.'
@@ -73,4 +69,3 @@ async function requireAdmin(req, res, next) {
 }
 
 module.exports = { requireAuth, requireAdmin };
-

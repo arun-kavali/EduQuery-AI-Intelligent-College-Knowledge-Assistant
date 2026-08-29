@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
@@ -12,6 +12,11 @@ function AppLayout({ currentUser, setCurrentUser }) {
   const location = useLocation();
   const isDashboardRoute = ['/chat', '/documents', '/admin'].some(path => location.pathname.startsWith(path));
   const isAuthRoute = location.pathname === '/auth';
+
+  // Strict Protection: Require login for all dashboard routes
+  if (isDashboardRoute && !currentUser) {
+    return <Navigate to="/auth" replace />;
+  }
 
   if (isDashboardRoute) {
     return (
@@ -39,6 +44,9 @@ function AppLayout({ currentUser, setCurrentUser }) {
   }
 
   if (isAuthRoute) {
+    if (currentUser) {
+      return <Navigate to={currentUser.role === 'admin' ? '/admin' : '/chat'} replace />;
+    }
     return <AuthPage currentUser={currentUser} setCurrentUser={setCurrentUser} />;
   }
 
@@ -58,15 +66,14 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const saved = localStorage.getItem('eduquery_user');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.email) return parsed;
+      }
     } catch (e) {
-      // Fallback
+      console.error('Error parsing stored user:', e);
     }
-    return {
-      email: 'student@eduquery.edu',
-      full_name: 'Demo Student',
-      role: 'student'
-    };
+    return null;
   });
 
   const handleSetUser = (user) => {
@@ -75,6 +82,12 @@ export default function App() {
       localStorage.setItem('eduquery_user', JSON.stringify(user));
     } else {
       localStorage.removeItem('eduquery_user');
+      // Clear conversation caches on logout to guarantee complete data isolation
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('eduquery_conversations_')) {
+          localStorage.removeItem(key);
+        }
+      });
     }
   };
 
@@ -84,4 +97,3 @@ export default function App() {
     </Router>
   );
 }
-

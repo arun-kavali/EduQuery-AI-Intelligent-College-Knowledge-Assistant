@@ -12,19 +12,31 @@ export default function Sidebar({ currentUser, setCurrentUser }) {
   const [conversations, setConversations] = useState([]);
 
   useEffect(() => {
-    fetchConversations();
-  }, [location.pathname]);
+    if (currentUser?.id) {
+      fetchConversations();
+    } else {
+      setConversations([]);
+    }
+  }, [location.pathname, currentUser?.id]);
 
   const fetchConversations = async () => {
+    if (!currentUser?.id) {
+      setConversations([]);
+      return;
+    }
     try {
       const res = await apiClient.get('/chat/conversations');
       if (res.data.success && Array.isArray(res.data.conversations)) {
         setConversations(res.data.conversations);
+      } else {
+        setConversations([]);
       }
     } catch (err) {
       console.error('Error fetching conversations in sidebar:', err);
+      setConversations([]);
     }
   };
+
 
   const isActive = (path) => {
     if (path === '/chat') {

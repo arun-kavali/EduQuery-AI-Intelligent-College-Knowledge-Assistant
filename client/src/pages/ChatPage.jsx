@@ -35,39 +35,52 @@ export default function ChatPage({ currentUser }) {
   ];
 
   useEffect(() => {
-    fetchConversations();
-  }, []);
+    if (currentUser?.id) {
+      fetchConversations();
+    } else {
+      setConversations([]);
+      setMessages([]);
+      setCurrentConvId(null);
+      setActiveSources([]);
+    }
+  }, [currentUser?.id]);
 
   useEffect(() => {
-    if (conversationId) {
+    if (conversationId && currentUser?.id) {
       loadConversationMessages(conversationId);
     } else {
       setCurrentConvId(null);
-      setMessages(defaultMessages);
+      setMessages([]);
+      setActiveSources([]);
     }
-  }, [conversationId]);
+  }, [conversationId, currentUser?.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
   const fetchConversations = async () => {
+    if (!currentUser?.id) return;
     try {
       const res = await apiClient.get('/chat/conversations');
       if (res.data.success && Array.isArray(res.data.conversations)) {
         setConversations(res.data.conversations);
+      } else {
+        setConversations([]);
       }
     } catch (err) {
       console.error('Error fetching conversations:', err);
+      setConversations([]);
     }
   };
 
   const loadConversationMessages = async (id) => {
+    if (!currentUser?.id) return;
     setIsLoading(true);
     setCurrentConvId(id);
     try {
       const res = await apiClient.get(`/chat/conversations/${id}`);
-      if (res.data.success && Array.isArray(res.data.messages) && res.data.messages.length > 0) {
+      if (res.data.success && Array.isArray(res.data.messages)) {
         const formatted = res.data.messages.map((m) => ({
           id: m.id,
           sender: m.sender,
@@ -97,14 +110,22 @@ export default function ChatPage({ currentUser }) {
             badge_color: (c.similarity_score || 90) > 85 ? 'blue' : 'green',
             snippet: c.snippet || ''
           })));
+        } else {
+          setActiveSources([]);
         }
       }
     } catch (err) {
       console.error('Error loading conversation messages:', err);
+      setMessages([]);
+      setActiveSources([]);
+      if (err.response?.status === 403 || err.response?.status === 401) {
+        navigate('/chat', { replace: true });
+      }
     } finally {
       setIsLoading(false);
     }
   };
+
 
 
   const handleSendMessage = async (e) => {

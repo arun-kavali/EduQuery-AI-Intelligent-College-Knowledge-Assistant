@@ -1,12 +1,16 @@
 const express = require('express');
 const { supabase } = require('../services/supabaseService');
 const { generateEmbedding, searchSimilarChunks, generateRAGAnswer } = require('../services/ragService');
+const { requireAuth } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
+// Apply requireAuth to all chat routes to enforce authentication & user_id scoping
+router.use(requireAuth);
+
 /**
  * POST /api/chat/query
- * Primary RAG query pipeline endpoint
+ * Primary RAG query pipeline endpoint with authenticated user_id tracking
  */
 router.post('/query', async (req, res) => {
   try {
@@ -16,17 +20,35 @@ router.post('/query', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Query message cannot be empty.' });
     }
 
-    console.log(`[RAG Query] User asked: "${message}"`);
+    const authUserId = req.user?.id;
+    console.log(`[RAG Query] User (${authUserId}) asked: "${message}"`);
 
-    // 1. Get or create conversation record
+    // 1. Get or create conversation record with user ownership
     let convId = conversation_id;
     if (!convId) {
       const { data: conv, error: convErr } = await supabase
         .from('conversations')
-        .insert([{ title: message.substring(0, 35) + '...', department: department || 'General' }])
+        .insert([
+          {
+            user_id: authUserId,
+            title: message.substring(0, 35) + '...',
+            department: department || 'General'
+          }
+        ])
         .select()
         .single();
       if (!convErr && conv) convId = conv.id;
+    } else {
+      // Verify user owns this existing conversation
+      const { data: existingConv } = await supabase
+        .from('conversations')
+        .select('id, user_id')
+        .eq('id', convId)
+        .maybeSingle();
+
+      if (existingConv && existingConv.user_id && existingConv.user_id !== authUserId) {
+        return res.status(403).json({ success: false, error: 'Access Denied: You do not own this conversation.' });
+      }
     }
 
     // Save user message to database
@@ -90,13 +112,19 @@ router.post('/query', async (req, res) => {
 
 /**
  * GET /api/chat/conversations
- * Fetch user chat sessions
+ * Fetch ONLY the authenticated user's chat sessions
  */
 router.get('/conversations', async (req, res) => {
   try {
+    const authUserId = req.user?.id;
+    if (!authUserId) {
+      return res.status(401).json({ success: false, error: 'User authentication required.' });
+    }
+
     const { data, error } = await supabase
       .from('conversations')
       .select('*')
+      .eq('user_id', authUserId)
       .order('updated_at', { ascending: false });
 
     if (error) throw error;
@@ -108,11 +136,24 @@ router.get('/conversations', async (req, res) => {
 
 /**
  * GET /api/chat/conversations/:id
- * Get full message list for a conversation
+ * Get full message list for a conversation owned by the user
  */
 router.get('/conversations/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const authUserId = req.user?.id;
+
+    // Verify conversation ownership
+    const { data: conv } = await supabase
+      .from('conversations')
+      .select('id, user_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (!conv || (conv.user_id && conv.user_id !== authUserId)) {
+      return res.status(403).json({ success: false, error: 'Access Denied: You do not own this conversation.' });
+    }
+
     const { data: messages, error } = await supabase
       .from('messages')
       .select('*')
@@ -128,11 +169,24 @@ router.get('/conversations/:id', async (req, res) => {
 
 /**
  * DELETE /api/chat/conversations/:id
- * Delete a conversation
+ * Delete a conversation owned by the user
  */
 router.delete('/conversations/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const authUserId = req.user?.id;
+
+    // Verify conversation ownership
+    const { data: conv } = await supabase
+      .from('conversations')
+      .select('id, user_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (!conv || (conv.user_id && conv.user_id !== authUserId)) {
+      return res.status(403).json({ success: false, error: 'Access Denied: You cannot delete this conversation.' });
+    }
+
     await supabase.from('messages').delete().eq('conversation_id', id);
     const { error } = await supabase.from('conversations').delete().eq('id', id);
     if (error) throw error;
