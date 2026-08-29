@@ -34,7 +34,7 @@ router.get('/', async (req, res) => {
     res.json({ success: true, documents: data || [] });
   } catch (err) {
     console.error('Error fetching documents:', err.message);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, stage: 'database', message: err.message });
   }
 });
 
@@ -62,30 +62,45 @@ router.get('/:id', async (req, res) => {
       chunks: chunks || []
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, stage: 'database', message: err.message });
   }
 });
 
 /**
  * POST /api/documents/upload
- * Admin Upload document, extract text, chunk, embed, and insert into Supabase
+ * Detailed Stage-by-Stage Server-Side Logging & Error Handling
  */
-router.post('/upload', requireAdmin, upload.single('file'), async (req, res) => {
+router.post('/upload', (req, res, next) => {
+  console.log('[UPLOAD 1] Incoming document upload request received.');
+  next();
+}, requireAdmin, (req, res, next) => {
+  console.log('[UPLOAD 2 & 3] Admin authentication & authorization verified for user:', req.user?.email);
+  next();
+}, upload.single('file'), async (req, res) => {
   try {
     const { title, category, department, description } = req.body;
     const file = req.file;
 
     if (!file) {
-      return res.status(400).json({ success: false, error: 'No file uploaded' });
-    }
-
-    // File type validation
-    const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword', 'text/plain'];
-    const ext = file.originalname.split('.').pop().toLowerCase();
-    if (!allowedTypes.includes(file.mimetype) && !['pdf', 'docx', 'doc', 'txt'].includes(ext)) {
+      console.error('[UPLOAD FAILED AT STEP 4] No file received by Multer.');
       return res.status(400).json({
         success: false,
-        error: 'Unsupported file format. Please upload a PDF, DOCX, or TXT file.'
+        stage: 'file_upload',
+        message: 'No file received by server. Please select a PDF, DOCX, or TXT document.'
+      });
+    }
+
+    console.log(`[UPLOAD 4] File received via Multer: "${file.originalname}" (${file.size} bytes, mimetype: ${file.mimetype}).`);
+
+    // File type validation
+    const allowedMimeTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword', 'text/plain'];
+    const ext = file.originalname.split('.').pop().toLowerCase();
+    if (!allowedMimeTypes.includes(file.mimetype) && !['pdf', 'docx', 'doc', 'txt'].includes(ext)) {
+      console.error(`[UPLOAD FAILED AT STEP 4] Unsupported file format: ${file.originalname} (${file.mimetype})`);
+      return res.status(400).json({
+        success: false,
+        stage: 'file_upload',
+        message: 'Unsupported file format. Please upload a PDF, DOCX, or TXT document.'
       });
     }
 
@@ -93,13 +108,29 @@ router.post('/upload', requireAdmin, upload.single('file'), async (req, res) => 
     const docCategory = category || 'General';
     const docDept = department || 'General';
 
-    console.log(`[Upload] Processing ${file.originalname} (${file.size} bytes) for RAG Ingestion...`);
-
-    // 1. Extract raw text from uploaded file
-    const extractedText = await extractTextFromFile(file.buffer, file.mimetype, file.originalname);
-    if (!extractedText || extractedText.trim().length === 0) {
-      return res.status(400).json({ success: false, error: 'Failed to extract text from document.' });
+    // 1. Text Extraction Stage
+    let extractedText = '';
+    try {
+      extractedText = await extractTextFromFile(file.buffer, file.mimetype, file.originalname);
+    } catch (textErr) {
+      console.error('[UPLOAD FAILED AT STEP 5] Text extraction failed:', textErr.message);
+      return res.status(500).json({
+        success: false,
+        stage: 'text_extraction',
+        message: 'Unable to extract document text: ' + textErr.message
+      });
     }
+
+    if (!extractedText || extractedText.trim().length === 0) {
+      console.error('[UPLOAD FAILED AT STEP 5] Extracted text is empty.');
+      return res.status(400).json({
+        success: false,
+        stage: 'text_extraction',
+        message: 'Extracted text is empty. Document may be scanned image or empty.'
+      });
+    }
+
+    console.log(`[UPLOAD 5] Text extraction successful (${extractedText.length} characters).`);
 
     // 2. Insert document record into Supabase
     const { data: docRecord, error: docErr } = await supabase
@@ -113,23 +144,57 @@ router.post('/upload', requireAdmin, upload.single('file'), async (req, res) => 
           file_size: file.size,
           category: docCategory,
           department: docDept,
+          uploaded_by: req.user.id,
           status: 'processing'
         }
       ])
       .select()
       .single();
 
-    if (docErr) throw docErr;
+    if (docErr) {
+      console.error('[UPLOAD FAILED AT STEP 8] Supabase document record insertion error:', docErr.message);
+      return res.status(500).json({
+        success: false,
+        stage: 'database',
+        message: 'Supabase document insertion failed: ' + docErr.message
+      });
+    }
 
-    // 3. Chunk text into ~1000 char segments with overlap
-    const textChunks = chunkText(extractedText, 1000, 200);
-    console.log(`[RAG Chunking] Generated ${textChunks.length} chunks for ${docTitle}`);
+    console.log(`[UPLOAD 8] Document record inserted into Supabase with ID: ${docRecord.id}`);
 
-    // 4. Generate embeddings and store document_chunks
+    // 3. Text Chunking Stage
+    let textChunks = [];
+    try {
+      textChunks = chunkText(extractedText, 1000, 200);
+    } catch (chunkErr) {
+      console.error('[UPLOAD FAILED AT STEP 6] Chunking failed:', chunkErr.message);
+      await supabase.from('documents').update({ status: 'failed', error_message: chunkErr.message }).eq('id', docRecord.id);
+      return res.status(500).json({
+        success: false,
+        stage: 'chunking',
+        message: 'Chunk generation failed: ' + chunkErr.message
+      });
+    }
+
+    console.log(`[UPLOAD 6] Chunk generation successful (${textChunks.length} chunks).`);
+
+    // 4. Embedding Generation & Vector Insertion Stage
     const chunkRecords = [];
     for (let idx = 0; idx < textChunks.length; idx++) {
       const chunkContent = textChunks[idx];
-      const embedding = await generateEmbedding(chunkContent);
+      let embedding = null;
+
+      try {
+        embedding = await generateEmbedding(chunkContent);
+      } catch (embErr) {
+        console.error(`[UPLOAD FAILED AT STEP 7] Embedding generation failed for chunk #${idx + 1}:`, embErr.message);
+        await supabase.from('documents').update({ status: 'failed', error_message: embErr.message }).eq('id', docRecord.id);
+        return res.status(500).json({
+          success: false,
+          stage: 'embedding',
+          message: 'Gemini embedding generation failed: ' + embErr.message
+        });
+      }
 
       chunkRecords.push({
         document_id: docRecord.id,
@@ -146,30 +211,50 @@ router.post('/upload', requireAdmin, upload.single('file'), async (req, res) => 
       });
     }
 
-    const { error: chunkErr } = await supabase.from('document_chunks').insert(chunkRecords);
-    if (chunkErr) throw chunkErr;
+    console.log(`[UPLOAD 7] Gemini embedding generation successful (${chunkRecords.length} vectors generated, length: ${chunkRecords[0].embedding.length}).`);
 
-    // 5. Update document status to processed
+    // 5. Insert document_chunks into Supabase
+    const { error: chunkInsertErr } = await supabase.from('document_chunks').insert(chunkRecords);
+    if (chunkInsertErr) {
+      console.error('[UPLOAD FAILED AT STEP 9] Supabase document_chunks insertion error:', chunkInsertErr.message);
+      await supabase.from('documents').update({ status: 'failed', error_message: chunkInsertErr.message }).eq('id', docRecord.id);
+      return res.status(500).json({
+        success: false,
+        stage: 'database',
+        message: 'Supabase document_chunks insertion failed: ' + chunkInsertErr.message
+      });
+    }
+
+    console.log('[UPLOAD 9] Chunks inserted into Supabase document_chunks table successfully.');
+
+    // 6. Update document status to 'indexed'
     await supabase
       .from('documents')
       .update({
         chunk_count: textChunks.length,
-        status: 'processed'
+        status: 'indexed'
       })
       .eq('id', docRecord.id);
 
+    console.log('[UPLOAD SUCCESS] Document fully indexed into RAG vector store!');
+
     res.json({
       success: true,
+      stage: 'complete',
       message: 'Document uploaded and successfully indexed into RAG vector store.',
       document: {
         ...docRecord,
         chunk_count: textChunks.length,
-        status: 'processed'
+        status: 'indexed'
       }
     });
   } catch (err) {
-    console.error('Error during document upload & RAG ingestion:', err);
-    res.status(500).json({ success: false, error: err.message });
+    console.error('[UPLOAD EXCEPTION]:', err);
+    res.status(500).json({
+      success: false,
+      stage: 'server',
+      message: err.message || 'Internal server error during upload.'
+    });
   }
 });
 
@@ -181,15 +266,13 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Delete chunks first
     await supabase.from('document_chunks').delete().eq('document_id', id);
-    // Delete main document record
     const { error } = await supabase.from('documents').delete().eq('id', id);
     if (error) throw error;
 
     res.json({ success: true, message: 'Document and vector embeddings deleted successfully.' });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, stage: 'database', message: err.message });
   }
 });
 

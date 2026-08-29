@@ -11,8 +11,27 @@ const authRoutes = require('./routes/auth');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors());
+// Configured CORS allowing production Vercel frontend and local development
+const allowedOrigins = [
+  'https://eduqueryai.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:5000'
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(null, true); // Permissive for production deployment
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-role', 'x-user-email', 'x-access-token']
+}));
+
 app.use(express.json());
 
 // API Routes
@@ -35,7 +54,8 @@ app.use((err, req, res, next) => {
   console.error('Unhandled server error:', err);
   res.status(500).json({
     success: false,
-    error: err.message || 'Internal Server Error'
+    stage: 'server',
+    message: err.message || 'Internal Server Error'
   });
 });
 
@@ -45,4 +65,3 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`📍 Health Check: http://0.0.0.0:${PORT}/api/health`);
   console.log(`=================================================`);
 });
-

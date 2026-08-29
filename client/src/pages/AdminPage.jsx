@@ -122,11 +122,14 @@ export default function AdminPage({ currentUser }) {
 
     try {
       // Simulate visual progress steps for smooth UX
-      setTimeout(() => setUploadStep(2), 600);
-      setTimeout(() => setUploadStep(3), 1200);
-      setTimeout(() => setUploadStep(4), 1800);
+      setTimeout(() => setUploadStep(2), 500);
+      setTimeout(() => setUploadStep(3), 1000);
+      setTimeout(() => setUploadStep(4), 1500);
 
-      const res = await apiClient.post('/documents/upload', formData);
+      // Pass Content-Type undefined so browser automatically sets multipart/form-data boundary
+      const res = await apiClient.post('/documents/upload', formData, {
+        headers: { 'Content-Type': undefined }
+      });
 
       if (res.data.success) {
         setUploadStep(5);
@@ -136,16 +139,20 @@ export default function AdminPage({ currentUser }) {
         fetchStats();
         fetchDocuments();
       } else {
-        throw new Error(res.data.error || 'Ingestion failed.');
+        const stageStr = res.data.stage ? `[Stage: ${res.data.stage}] ` : '';
+        throw new Error(stageStr + (res.data.message || 'Ingestion failed.'));
       }
     } catch (err) {
       console.error('Upload Error:', err);
-      setUploadError(err.response?.data?.error || err.message || 'Failed to upload document. Please check server log.');
+      const stageErr = err.response?.data?.stage ? `[Failed at Stage: ${err.response.data.stage}] ` : '';
+      const msgErr = err.response?.data?.message || err.response?.data?.error || err.message || 'Failed to upload document. Please check server log.';
+      setUploadError(stageErr + msgErr);
       setUploadStep(0);
     } finally {
       setIsUploading(false);
     }
   };
+
 
   const handleDeleteDocument = async (id, title) => {
     if (!window.confirm(`Are you sure you want to delete "${title}" and all its vector chunks?`)) return;
