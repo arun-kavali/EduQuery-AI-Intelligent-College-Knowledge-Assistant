@@ -6,6 +6,9 @@ import apiClient from '../api/apiClient';
 
 export default function AuthPage({ currentUser, setCurrentUser }) {
   const [isLogin, setIsLogin] = useState(true);
+  // This controls only the sign-in entry point. The server remains the sole
+  // authority for the authenticated user's actual role.
+  const [loginAudience, setLoginAudience] = useState('student');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -86,7 +89,11 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
             setCurrentUser(userSession);
           }
 
-          setAuthSuccess(`Welcome back, ${verifiedName}! Redirecting to dashboard...`);
+          if (loginAudience === 'admin' && verifiedRole !== 'admin') {
+            setAuthSuccess(`This account has Student access. Redirecting to your student workspace...`);
+          } else {
+            setAuthSuccess(`Welcome back, ${verifiedName}! Redirecting to dashboard...`);
+          }
           setTimeout(() => {
             navigate(verifiedRole === 'admin' ? '/admin' : '/chat');
           }, 600);
@@ -280,6 +287,36 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
               Register
             </button>
           </div>
+
+          {isLogin && (
+            <div
+              aria-label="Login type"
+              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' }}
+            >
+              {[
+                ['student', 'Student Login', 'Access your student workspace'],
+                ['admin', 'Admin Login', 'Use your approved administrator account']
+              ].map(([audience, title, description]) => {
+                const selected = loginAudience === audience;
+                return (
+                  <button
+                    key={audience}
+                    type="button"
+                    onClick={() => { setLoginAudience(audience); setAuthError(null); setAuthSuccess(null); }}
+                    aria-pressed={selected}
+                    style={{
+                      textAlign: 'left', padding: '12px', borderRadius: '8px', cursor: 'pointer',
+                      border: `1px solid ${selected ? '#0b3bbd' : '#cbd5e1'}`,
+                      background: selected ? '#eff6ff' : '#ffffff', color: '#0f172a'
+                    }}
+                  >
+                    <span style={{ display: 'block', fontSize: '0.9rem', fontWeight: 700 }}>{title}</span>
+                    <span style={{ display: 'block', marginTop: '3px', fontSize: '0.72rem', color: '#64748b', lineHeight: 1.35 }}>{description}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Alert Messages */}
           {authError && (
