@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, ArrowRight, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 import { supabase as sbClient } from '../supabaseClient';
+import apiClient from '../api/apiClient';
 
 export default function AuthPage({ currentUser, setCurrentUser }) {
   const [isLogin, setIsLogin] = useState(true);
-  const [selectedRole, setSelectedRole] = useState('student');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -14,23 +14,6 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
   const [authError, setAuthError] = useState(null);
   const [authSuccess, setAuthSuccess] = useState(null);
   const navigate = useNavigate();
-
-  const handleRoleSwitch = (role) => {
-    setSelectedRole(role);
-    setAuthError(null);
-    setAuthSuccess(null);
-    if (role === 'admin') {
-      if (!email || email === 'student@eduquery.edu') {
-        setEmail('admin@eduquery.edu');
-        setPassword('admin123');
-      }
-    } else {
-      if (email === 'admin@eduquery.edu' || email === 'demo@eduquery.ai') {
-        setEmail('');
-        setPassword('');
-      }
-    }
-  };
 
 
   const handleAuthSubmit = async (e) => {
@@ -83,52 +66,10 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
           const authUserId = data.user.id;
           console.log('[Supabase Auth Debug] Authenticated User UUID:', authUserId);
 
-          // Step 3: Load or repair profile from public.profiles using authenticated user ID (profiles.id = auth.users.id)
-          let { data: profile, error: profileErr } = await sbClient
-            .from('profiles')
-            .select('*')
-            .eq('id', authUserId)
-            .maybeSingle();
+          const { data: profileResponse } = await apiClient.get('/auth/me', { headers: { Authorization: `Bearer ${data.session?.access_token}` } });
+          const profile = profileResponse.profile;
 
-          if (profileErr) {
-            console.warn('[Supabase Profile Query Warning by ID]:', profileErr.message);
-          }
-
-          // Fallback lookup by email if ID lookup did not return a row
-          if (!profile) {
-            console.log('[Supabase Auth Debug] Profile not found by ID, attempting lookup by email:', data.user.email);
-            const { data: profileByEmail } = await sbClient
-              .from('profiles')
-              .select('*')
-              .eq('email', data.user.email)
-              .maybeSingle();
-            profile = profileByEmail;
-          }
-
-          // Safe Profile Repair: Ensure profile exists with default role 'student' (or 'admin' if admin email)
-          if (!profile) {
-            console.log('[Supabase Auth Debug] Profile missing for authenticated user. Repairing profile row in public.profiles...');
-            const defaultRole = data.user.email.includes('admin') || data.user.email === 'demo@eduquery.ai' ? 'admin' : 'student';
-            const newProfile = {
-              id: authUserId,
-              email: data.user.email,
-              full_name: data.user.user_metadata?.full_name || data.user.email.split('@')[0],
-              role: defaultRole
-            };
-
-            const { data: repairedProfile, error: repairErr } = await sbClient
-              .from('profiles')
-              .upsert([newProfile])
-              .select()
-              .maybeSingle();
-
-            if (repairErr) {
-              console.warn('[Supabase Profile Repair Warning]:', repairErr.message);
-            }
-            profile = repairedProfile || newProfile;
-          }
-
-          const verifiedRole = profile?.role || 'student';
+          const verifiedRole = profile.role;
           const verifiedName = profile?.full_name || data.user.user_metadata?.full_name || data.user.email.split('@')[0];
 
           console.log('[Supabase Auth Debug] Verified User Profile Role:', verifiedRole);
@@ -165,8 +106,7 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
           password,
           options: {
             data: {
-              full_name: registeredName,
-              role: 'student'
+              full_name: registeredName
             }
           }
         });
@@ -186,19 +126,6 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
         }
 
         if (data && data.user) {
-          // Explicitly insert/upsert matching profile record into public.profiles
-          try {
-            await sbClient.from('profiles').upsert([
-              {
-                id: data.user.id,
-                email: data.user.email,
-                full_name: registeredName,
-                role: 'student'
-              }
-            ]);
-          } catch (pErr) {
-            console.warn('[Profile Upsert Warning]:', pErr.message);
-          }
 
           if (data.user && !data.session) {
             setAuthSuccess('Account created! Please check your email inbox to confirm your account, then log in.');
@@ -353,60 +280,6 @@ export default function AuthPage({ currentUser, setCurrentUser }) {
               Register
             </button>
           </div>
-
-          {/* Visibly Rendered Student / Admin Role Selector Toggle */}
-          {isLogin && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              marginBottom: '20px',
-              background: '#f1f5f9',
-              padding: '4px',
-              borderRadius: '10px'
-            }}>
-              <button
-                type="button"
-                onClick={() => handleRoleSwitch('student')}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  borderRadius: '7px',
-                  border: 'none',
-                  background: selectedRole === 'student' ? '#ffffff' : 'transparent',
-                  color: selectedRole === 'student' ? '#0f172a' : '#64748b',
-                  fontWeight: selectedRole === 'student' ? 700 : 500,
-                  boxShadow: selectedRole === 'student' ? '0 1px 3px rgba(15, 23, 42, 0.1)' : 'none',
-                  cursor: 'pointer',
-                  fontSize: '0.85rem',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                Student Access
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleRoleSwitch('admin')}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  borderRadius: '7px',
-                  border: 'none',
-                  background: selectedRole === 'admin' ? '#0b3bbd' : 'transparent',
-                  color: selectedRole === 'admin' ? '#ffffff' : '#64748b',
-                  fontWeight: selectedRole === 'admin' ? 700 : 500,
-                  boxShadow: selectedRole === 'admin' ? '0 2px 6px rgba(11, 59, 189, 0.3)' : 'none',
-                  cursor: 'pointer',
-                  fontSize: '0.85rem',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                Admin Access
-              </button>
-            </div>
-          )}
 
           {/* Alert Messages */}
           {authError && (

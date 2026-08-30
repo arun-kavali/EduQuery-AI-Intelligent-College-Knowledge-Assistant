@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { MessageSquare, FileText, Settings, Plus, LogOut, Clock, Shield } from 'lucide-react';
+import { MessageSquare, FileText, Settings, Plus, LogOut, Clock, Shield, Trash2 } from 'lucide-react';
 import apiClient from '../api/apiClient';
 
 const LOGO_URL = 'https://res.cloudinary.com/dvakxuk58/image/upload/v1788005318/IMG_20260829_173724_xw36nc.png';
@@ -225,5 +225,4 @@ export default function Sidebar({ currentUser, setCurrentUser, handleLogout }) {
     </aside>
   );
 }
-
 

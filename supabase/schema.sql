@@ -110,6 +110,59 @@ CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON public.document_chunks(docu
 CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON public.conversations(user_id);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON public.messages(conversation_id);
 
+-- Profiles are provisioned by trusted database code. Client-provided metadata
+-- may set a display name, but can never select an application role.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, full_name, role)
+  VALUES (NEW.id, NEW.email, COALESCE(NEW.raw_user_meta_data ->> 'full_name', split_part(NEW.email, '@', 1)), 'student')
+  ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.message_sources ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.answer_feedback ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.document_chunks ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "profiles_select_own" ON public.profiles;
+CREATE POLICY "profiles_select_own" ON public.profiles FOR SELECT TO authenticated USING (id = auth.uid());
+
+DROP POLICY IF EXISTS "conversations_own" ON public.conversations;
+CREATE POLICY "conversations_own" ON public.conversations FOR ALL TO authenticated
+  USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "messages_own_conversation" ON public.messages;
+CREATE POLICY "messages_own_conversation" ON public.messages FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.conversations c WHERE c.id = conversation_id AND c.user_id = auth.uid()))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.conversations c WHERE c.id = conversation_id AND c.user_id = auth.uid()));
+
+DROP POLICY IF EXISTS "message_sources_own_conversation" ON public.message_sources;
+CREATE POLICY "message_sources_own_conversation" ON public.message_sources FOR SELECT TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.messages m JOIN public.conversations c ON c.id = m.conversation_id WHERE m.id = message_id AND c.user_id = auth.uid()));
+
+DROP POLICY IF EXISTS "feedback_own" ON public.answer_feedback;
+CREATE POLICY "feedback_own" ON public.answer_feedback FOR ALL TO authenticated
+  USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+
+DROP POLICY IF EXISTS "documents_authenticated_read" ON public.documents;
+CREATE POLICY "documents_authenticated_read" ON public.documents FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "chunks_authenticated_read" ON public.document_chunks;
+CREATE POLICY "chunks_authenticated_read" ON public.document_chunks FOR SELECT TO authenticated USING (true);
+
 -- ====================================================================
 -- Vector Search RPC Function (Cosine Similarity match_chunks)
 -- ====================================================================

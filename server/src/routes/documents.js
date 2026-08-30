@@ -1,8 +1,8 @@
 const express = require('express');
 const multer = require('multer');
 const { supabase } = require('../services/supabaseService');
-const { extractTextFromFile, chunkText, generateEmbedding } = require('../services/ragService');
-const { requireAdmin } = require('../middleware/authMiddleware');
+const { extractTextFromFile, chunkText, generateEmbedding, RAGServiceError } = require('../services/ragService');
+const { requireAuth, requireAdmin } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 const upload = multer({
@@ -14,7 +14,7 @@ const upload = multer({
  * GET /api/documents
  * List all college knowledge base documents
  */
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   try {
     const { category, department, search } = req.query;
     let query = supabase.from('documents').select('*').order('created_at', { ascending: false });
@@ -42,7 +42,7 @@ router.get('/', async (req, res) => {
  * GET /api/documents/:id
  * Get single document details & chunks preview
  */
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { data: doc, error: docErr } = await supabase.from('documents').select('*').eq('id', id).single();
@@ -145,7 +145,7 @@ router.post('/upload', (req, res, next) => {
           category: docCategory,
           department: docDept,
           uploaded_by: req.user.id,
-          status: 'processing'
+          processing_status: 'processing'
         }
       ])
       .select()
@@ -168,7 +168,7 @@ router.post('/upload', (req, res, next) => {
       textChunks = chunkText(extractedText, 1000, 200);
     } catch (chunkErr) {
       console.error('[UPLOAD FAILED AT STEP 6] Chunking failed:', chunkErr.message);
-      await supabase.from('documents').update({ status: 'failed', error_message: chunkErr.message }).eq('id', docRecord.id);
+      await supabase.from('documents').update({ processing_status: 'failed', processing_error: chunkErr.message }).eq('id', docRecord.id);
       return res.status(500).json({
         success: false,
         stage: 'chunking',
@@ -188,7 +188,7 @@ router.post('/upload', (req, res, next) => {
         embedding = await generateEmbedding(chunkContent);
       } catch (embErr) {
         console.error(`[UPLOAD FAILED AT STEP 7] Embedding generation failed for chunk #${idx + 1}:`, embErr.message);
-        await supabase.from('documents').update({ status: 'failed', error_message: embErr.message }).eq('id', docRecord.id);
+        await supabase.from('documents').update({ processing_status: 'failed', processing_error: embErr.message }).eq('id', docRecord.id);
         return res.status(500).json({
           success: false,
           stage: 'embedding',
@@ -217,7 +217,7 @@ router.post('/upload', (req, res, next) => {
     const { error: chunkInsertErr } = await supabase.from('document_chunks').insert(chunkRecords);
     if (chunkInsertErr) {
       console.error('[UPLOAD FAILED AT STEP 9] Supabase document_chunks insertion error:', chunkInsertErr.message);
-      await supabase.from('documents').update({ status: 'failed', error_message: chunkInsertErr.message }).eq('id', docRecord.id);
+      await supabase.from('documents').update({ processing_status: 'failed', processing_error: chunkInsertErr.message }).eq('id', docRecord.id);
       return res.status(500).json({
         success: false,
         stage: 'database',
@@ -228,13 +228,28 @@ router.post('/upload', (req, res, next) => {
     console.log('[UPLOAD 9] Chunks inserted into Supabase document_chunks table successfully.');
 
     // 6. Update document status to 'indexed'
-    await supabase
+    const { data: indexedDocument, error: statusUpdateError } = await supabase
       .from('documents')
       .update({
         chunk_count: textChunks.length,
-        status: 'indexed'
+        processing_status: 'indexed',
+        processing_error: null
       })
-      .eq('id', docRecord.id);
+      .eq('id', docRecord.id)
+      .select()
+      .single();
+
+    if (statusUpdateError) {
+      await supabase
+        .from('documents')
+        .update({ processing_status: 'failed', processing_error: statusUpdateError.message })
+        .eq('id', docRecord.id);
+      return res.status(500).json({
+        success: false,
+        stage: 'database',
+        message: 'Document chunks were stored, but the indexed status could not be persisted: ' + statusUpdateError.message
+      });
+    }
 
     console.log('[UPLOAD SUCCESS] Document fully indexed into RAG vector store!');
 
@@ -243,16 +258,14 @@ router.post('/upload', (req, res, next) => {
       stage: 'complete',
       message: 'Document uploaded and successfully indexed into RAG vector store.',
       document: {
-        ...docRecord,
-        chunk_count: textChunks.length,
-        status: 'indexed'
+        ...indexedDocument
       }
     });
   } catch (err) {
     console.error('[UPLOAD EXCEPTION]:', err);
-    res.status(500).json({
+    res.status(err instanceof RAGServiceError ? 502 : 500).json({
       success: false,
-      stage: 'server',
+      stage: err.stage || 'server',
       message: err.message || 'Internal server error during upload.'
     });
   }

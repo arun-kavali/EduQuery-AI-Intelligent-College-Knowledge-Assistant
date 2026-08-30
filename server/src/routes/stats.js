@@ -10,13 +10,13 @@ const router = express.Router();
  */
 router.get('/stats', requireAdmin, async (req, res) => {
   try {
-    const { data: docs, error: docErr } = await supabase.from('documents').select('id, status, chunk_count');
+    const { data: docs, error: docErr } = await supabase.from('documents').select('id, processing_status, chunk_count');
     const { data: chunks, error: chunkErr } = await supabase.from('document_chunks').select('id');
     const { data: convs, error: convErr } = await supabase.from('conversations').select('id');
     const { data: msgs, error: msgErr } = await supabase.from('messages').select('id, is_unknown, feedback');
 
     const totalDocuments = docs ? docs.length : 0;
-    const processedDocs = docs ? docs.filter(d => d.status === 'processed' || d.status === 'indexed').length : 0;
+    const processedDocs = docs ? docs.filter(d => d.processing_status === 'processed' || d.processing_status === 'indexed').length : 0;
     const totalChunks = chunks ? chunks.length : 0;
     const totalConversations = convs ? convs.length : 0;
 

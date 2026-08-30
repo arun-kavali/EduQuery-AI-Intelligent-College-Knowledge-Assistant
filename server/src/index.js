@@ -12,19 +12,21 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Configured CORS allowing production Vercel frontend and local development
-const allowedOrigins = [
-  'https://eduqueryai.vercel.app',
+const allowedOrigins = (process.env.CORS_ORIGINS || 'https://eduqueryai.vercel.app')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean)
+  .concat([
   'http://localhost:3000',
-  'http://localhost:5173',
-  'http://localhost:5000'
-];
+  'http://localhost:5173'
+]);
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(null, true); // Permissive for production deployment
+      callback(new Error('CORS origin is not allowed'));
     }
   },
   credentials: true,

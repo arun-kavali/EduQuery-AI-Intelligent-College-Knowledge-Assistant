@@ -1,6 +1,6 @@
 const express = require('express');
 const { supabase } = require('../services/supabaseService');
-const { generateEmbedding, searchSimilarChunks, generateRAGAnswer } = require('../services/ragService');
+const { generateEmbedding, searchSimilarChunks, generateRAGAnswer, RAGServiceError } = require('../services/ragService');
 const { requireAuth } = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -64,7 +64,6 @@ router.post('/query', async (req, res) => {
     // 3. Retrieve top-K relevant chunks via vector search
     const retrievedChunks = await searchSimilarChunks(
       queryEmbedding,
-      message,
       0.25, // Similarity threshold
       4,    // Match count
       category,
@@ -106,7 +105,11 @@ router.post('/query', async (req, res) => {
     });
   } catch (err) {
     console.error('Error during RAG chat query:', err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(err instanceof RAGServiceError ? 502 : 500).json({
+      success: false,
+      stage: err.stage || 'server',
+      error: err.message
+    });
   }
 });
 
@@ -208,10 +211,21 @@ router.post('/feedback', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid message_id or feedback value.' });
     }
 
+    const { data: message, error: lookupError } = await supabase
+      .from('messages')
+      .select('id, conversation_id, conversations!inner(user_id)')
+      .eq('id', message_id)
+      .eq('conversations.user_id', req.user.id)
+      .maybeSingle();
+
+    if (lookupError) throw lookupError;
+    if (!message) return res.status(403).json({ success: false, error: 'Access Denied: You do not own this message.' });
+
     const { error } = await supabase
       .from('messages')
       .update({ feedback })
-      .eq('id', message_id);
+      .eq('id', message_id)
+      .eq('conversation_id', message.conversation_id);
 
     if (error) throw error;
     res.json({ success: true, message: 'Feedback recorded.' });

@@ -8,6 +8,7 @@ import DocumentsPage from './pages/DocumentsPage';
 import AdminPage from './pages/AdminPage';
 import AuthPage from './pages/AuthPage';
 import { supabase } from './supabaseClient';
+import apiClient from './api/apiClient';
 
 function AppLayout({ currentUser, setCurrentUser, handleLogout }) {
   const location = useLocation();
@@ -75,27 +76,10 @@ export default function App() {
     }
 
     try {
-      let { data: profile, error: pErr } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', sessionUser.id)
-        .maybeSingle();
-
-      if (pErr) {
-        console.warn('[Supabase Profile Lookup Error]:', pErr.message);
-      }
-
-      if (!profile) {
-        const { data: pByEmail } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('email', sessionUser.email)
-          .maybeSingle();
-        profile = pByEmail;
-      }
-
-      const verifiedRole = profile?.role || (sessionUser.email?.includes('admin') ? 'admin' : 'student');
-      const verifiedName = profile?.full_name || sessionUser.user_metadata?.full_name || sessionUser.email.split('@')[0];
+      const response = await apiClient.get('/auth/me', { headers: { Authorization: `Bearer ${accessToken}` } });
+      const profile = response.data.profile;
+      const verifiedRole = profile.role;
+      const verifiedName = profile.full_name || sessionUser.user_metadata?.full_name || sessionUser.email.split('@')[0];
 
       const userObj = {
         id: sessionUser.id,
